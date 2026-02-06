@@ -32,14 +32,12 @@ User Request
 5. finishing-a-development-branch
     → Verify tests → Present options (merge/PR/keep/discard)
     ↓
-6. Update Notion documentation
-    → Design Doc: scope/requirement changes
-    → Architecture Doc: tech stack/pattern changes
+6. Update Notion documentation (see below)
 ```
 
 ## Notion Documentation
 
-**Notion Structure:**
+**Structure:**
 ```
 product-scout/
 ├── Designs/          # brainstorming outputs (feature designs)
@@ -53,7 +51,9 @@ product-scout/
 - [Design Doc](https://www.notion.so/2fd63f4877fd812b9877f00874bb81aa) - requirements, data flow, scope
 - [Architecture Doc](https://www.notion.so/2ff63f4877fd81cbb45ec15d9115d02f) - tech stack, patterns, structure
 
-**After completing features/milestones**, update both docs with any changes.
+**After completing features/milestones**, update:
+- Design Doc: scope/requirement changes
+- Architecture Doc: tech stack/pattern changes
 
 ## Key Skills
 

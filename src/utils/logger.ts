@@ -16,7 +16,7 @@ export const logger = {
   },
 
   debug: (msg: string, data?: unknown): void => {
-    if (process.env['DEBUG']) {
+    if (process.env.DEBUG) {
       console.log(`[DEBUG] ${timestamp()} ${msg}`, data ?? '');
     }
   },

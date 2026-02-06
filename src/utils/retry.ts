@@ -1,6 +1,10 @@
 import { logger } from './logger';
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
 
 export async function withRetry<T>(
   fn: () => Promise<T>,

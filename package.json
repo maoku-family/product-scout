@@ -14,13 +14,7 @@
   "lint-staged": {
     "*.ts": "eslint --fix"
   },
-  "prettier": {
-    "semi": true,
-    "singleQuote": true,
-    "tabWidth": 2,
-    "trailingComma": "es5",
-    "printWidth": 100
-  },
+  "prettier": {},
   "devDependencies": {
     "@types/bun": "latest",
     "eslint": "^9.39.2",

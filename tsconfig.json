@@ -5,22 +5,28 @@
     "moduleResolution": "bundler",
     "lib": ["ES2022"],
     "useDefineForClassFields": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
     "noEmit": true,
+    "skipLibCheck": true,
+
+    /* Path aliases */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    /* Linting */
     "strict": true,
     "noImplicitReturns": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
-    "noUncheckedIndexedAccess": true,
-    "allowUnreachableCode": false,
     "esModuleInterop": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "skipLibCheck": true,
-    "paths": {
-      "@/*": ["./src/*"]
-    }
+    "noUncheckedIndexedAccess": true,
+    "allowUnreachableCode": false
   },
   "include": ["src", "scripts", "test"]
 }

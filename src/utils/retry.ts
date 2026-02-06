@@ -1,4 +1,4 @@
-import { logger } from './logger';
+import { logger } from "./logger";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -8,7 +8,7 @@ function sleep(ms: number): Promise<void> {
 
 export async function withRetry<T>(
   fn: () => Promise<T>,
-  options: { maxRetries?: number; delay?: number } = {}
+  options: { maxRetries?: number; delay?: number } = {},
 ): Promise<T> {
   const { maxRetries = 3, delay = 1000 } = options;
 
@@ -23,5 +23,5 @@ export async function withRetry<T>(
       await sleep(delay * (i + 1)); // 指数退避
     }
   }
-  throw new Error('Unreachable');
+  throw new Error("Unreachable");
 }

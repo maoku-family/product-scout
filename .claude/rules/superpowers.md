@@ -59,5 +59,5 @@ User Request
 1. **Invoke skills before responding** - even for clarifying questions
 2. **Announce which skill you're using** - "I'm using [skill] to [purpose]"
 3. **Follow skills exactly** - especially rigid ones (TDD, debugging)
-4. **Sync to Notion** - brainstorming and plans sync to Notion
+4. **Sync to Notion** - any docs/ changes must sync to Notion
 5. **Never skip TDD** - tests first, then implementation

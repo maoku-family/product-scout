@@ -2,6 +2,26 @@
 
 When reviewing code for product-scout, apply these project-specific checks **in addition to** the standard superpowers code-reviewer checklist.
 
+## Verification Commands (MUST RUN)
+
+**Before reviewing code, run these commands and fix any issues:**
+
+```bash
+# 1. Run ESLint - fix all errors
+bun run lint
+
+# 2. Run TypeScript check - fix all errors
+bun run typecheck
+
+# 3. Run tests (if they exist)
+bun test
+```
+
+**Important:**
+- If any command fails, fix the issues BEFORE completing the review
+- Include the command output in your review findings
+- ESLint and TypeScript errors are **blocking** - must be fixed
+
 ## Project-Specific Checklist
 
 ### Data Validation
@@ -37,9 +57,9 @@ When reviewing code for product-scout, apply these project-specific checks **in 
 | withRetry for network requests | Silent failures | **Important** |
 | Clear error logs | Debugging difficulty | **Important** |
 | Unit tests for core logic | Regression risk | **Important** |
-| TypeScript strict passes | Type safety | **Important** |
+| TypeScript strict passes | Type safety | **Blocking** |
 | No secrets committed | Security breach | **Critical** |
-| ESLint passes | Code consistency | **Minor** |
+| ESLint passes | Code consistency | **Blocking** |
 
 ## Example Issue Format
 

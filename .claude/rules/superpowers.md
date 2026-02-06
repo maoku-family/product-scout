@@ -21,15 +21,15 @@ User Request
     → Sync to Notion: product-scout/Plans/
     ↓
 4. Choose execution method:
-   A) subagent-driven-development (same session)
+   A) subagent-driven-development (recommended, same session)
       - Fresh subagent per task
       - Two-stage review: spec compliance → code quality
       - Subagents use test-driven-development internally
 
-   B) executing-plans (separate session)
+   B) executing-plans (separate session, when needed)
       - Batch execution with human checkpoints
-      - Use test-driven-development for each task
-      - Use systematic-debugging when tests fail
+      - Use when tasks are tightly coupled
+      - Or when you want more manual control
     ↓
 5. finishing-a-development-branch
     → Verify tests → Present options (merge/PR/keep/discard)

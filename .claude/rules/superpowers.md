@@ -9,14 +9,14 @@ User Request
     ↓
 1. brainstorming (new features/ideas)
     → Output: docs/plans/YYYY-MM-DD-<topic>-design.md
-    → Sync to Notion: Design Doc
+    → Sync to Notion: product-scout/Designs/
     ↓
 2. using-git-worktrees (isolate work)
     → Create isolated workspace for implementation
     ↓
 3. writing-plans (create execution plan)
     → Output: docs/plans/YYYY-MM-DD-<feature-name>.md
-    → Sync to Notion: Create new plan page under product-scout
+    → Sync to Notion: product-scout/Plans/
     ↓
 4. Choose execution method:
    A) subagent-driven-development (same session)
@@ -38,6 +38,16 @@ User Request
 ```
 
 ## Notion Documentation
+
+**Notion Structure:**
+```
+product-scout/
+├── Designs/          # brainstorming outputs (feature designs)
+├── Plans/            # writing-plans outputs (implementation plans)
+├── Design            # Product Scout Design (main design doc)
+├── Architecture      # Product Scout Architecture
+└── Future Extensions # Future features (not in MVP)
+```
 
 **Before writing code**, read:
 - [Design Doc](https://www.notion.so/2fd63f4877fd812b9877f00874bb81aa) - requirements, data flow, scope

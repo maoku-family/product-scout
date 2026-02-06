@@ -9,7 +9,7 @@ User Request
     ↓
 1. brainstorming (new features/ideas)
     → Output: docs/plans/YYYY-MM-DD-<topic>-design.md
-    → Sync to Notion: 选品设计文档
+    → Sync to Notion: Design Doc
     ↓
 2. using-git-worktrees (isolate work)
     → Create isolated workspace for implementation
@@ -33,15 +33,15 @@ User Request
     → Verify tests → Present options (merge/PR/keep/discard)
     ↓
 6. Update Notion documentation
-    → 选品设计文档: scope/requirement changes
-    → 选品工程架构文档: tech stack/pattern changes
+    → Design Doc: scope/requirement changes
+    → Architecture Doc: tech stack/pattern changes
 ```
 
 ## Notion Documentation
 
 **Before writing code**, read:
-- [选品设计文档](https://www.notion.so/2fd63f4877fd812b9877f00874bb81aa) - requirements, data flow, scope
-- [选品工程架构文档](https://www.notion.so/2ff63f4877fd81cbb45ec15d9115d02f) - tech stack, patterns, structure
+- [Design Doc](https://www.notion.so/2fd63f4877fd812b9877f00874bb81aa) - requirements, data flow, scope
+- [Architecture Doc](https://www.notion.so/2ff63f4877fd81cbb45ec15d9115d02f) - tech stack, patterns, structure
 
 **After completing features/milestones**, update both docs with any changes.
 

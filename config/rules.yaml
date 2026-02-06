@@ -1,17 +1,17 @@
-# 筛选规则配置
-# 根据实际需求调整
+# Filtering rules configuration
+# Adjust based on actual needs
 
-region: th  # 目标地区：th=泰国, vn=越南, my=马来西亚
+region: th  # Target region: th=Thailand, vn=Vietnam, my=Malaysia
 
 filters:
   price:
-    min: 10   # 最低售价 (USD)
-    max: 30   # 最高售价 (USD)
+    min: 10   # Minimum price (USD)
+    max: 30   # Maximum price (USD)
 
   profit_margin:
-    min: 0.3  # 最低利润率 30%
+    min: 0.3  # Minimum profit margin 30%
 
   excluded_categories:
-    - 成人用品
-    - 武器
-    - 药品
+    - adult products
+    - weapons
+    - drugs

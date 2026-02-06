@@ -37,6 +37,14 @@ User Request
     → 选品工程架构文档: tech stack/pattern changes
 ```
 
+## Notion Documentation
+
+**Before writing code**, read:
+- [选品设计文档](https://www.notion.so/2fd63f4877fd812b9877f00874bb81aa) - requirements, data flow, scope
+- [选品工程架构文档](https://www.notion.so/2ff63f4877fd81cbb45ec15d9115d02f) - tech stack, patterns, structure
+
+**After completing features/milestones**, update both docs with any changes.
+
 ## Key Skills
 
 | Skill | When to Use |

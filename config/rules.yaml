@@ -1,0 +1,17 @@
+# 筛选规则配置
+# 根据实际需求调整
+
+region: th  # 目标地区：th=泰国, vn=越南, my=马来西亚
+
+filters:
+  price:
+    min: 10   # 最低售价 (USD)
+    max: 30   # 最高售价 (USD)
+
+  profit_margin:
+    min: 0.3  # 最低利润率 30%
+
+  excluded_categories:
+    - 成人用品
+    - 武器
+    - 药品

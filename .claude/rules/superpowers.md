@@ -7,6 +7,8 @@ Always follow the superpowers skill pipeline. If a skill might apply (even 1% ch
 ```
 User Request
     ↓
+0. Read docs/design.md and docs/architecture.md
+    ↓
 1. brainstorming (new features/ideas)
     → Output: docs/plans/YYYY-MM-DD-<topic>-design.md
     → Sync to Notion: product-scout/Designs/
@@ -32,28 +34,10 @@ User Request
 5. finishing-a-development-branch
     → Verify tests → Present options (merge/PR/keep/discard)
     ↓
-6. Update Notion documentation (see below)
+6. Update documentation
+    → Local: docs/design.md, docs/architecture.md
+    → Notion: product-scout/Design, product-scout/Architecture
 ```
-
-## Notion Documentation
-
-**Structure:**
-```
-product-scout/
-├── Designs/          # brainstorming outputs (feature designs)
-├── Plans/            # writing-plans outputs (implementation plans)
-├── Design            # Product Scout Design (main design doc)
-├── Architecture      # Product Scout Architecture
-└── Future Extensions # Future features (not in MVP)
-```
-
-**Before writing code**, read:
-- [Design Doc](https://www.notion.so/2fd63f4877fd812b9877f00874bb81aa) - requirements, data flow, scope
-- [Architecture Doc](https://www.notion.so/2ff63f4877fd81cbb45ec15d9115d02f) - tech stack, patterns, structure
-
-**After completing features/milestones**, update:
-- Design Doc: scope/requirement changes
-- Architecture Doc: tech stack/pattern changes
 
 ## Key Skills
 
@@ -75,5 +59,5 @@ product-scout/
 1. **Invoke skills before responding** - even for clarifying questions
 2. **Announce which skill you're using** - "I'm using [skill] to [purpose]"
 3. **Follow skills exactly** - especially rigid ones (TDD, debugging)
-4. **Document to Notion** - brainstorming and plans sync to Notion
+4. **Sync to Notion** - brainstorming and plans sync to Notion
 5. **Never skip TDD** - tests first, then implementation

@@ -9,7 +9,8 @@
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {
-    "pre-commit": "bunx lint-staged"
+    "pre-commit": "bunx lint-staged",
+    "pre-push": "branch=$(git rev-parse --abbrev-ref HEAD) && [ \"$branch\" = \"main\" ] && echo '❌ Direct push to main is not allowed. Create a PR instead.' && exit 1 || exit 0"
   },
   "lint-staged": {
     "*.ts": "eslint --fix"

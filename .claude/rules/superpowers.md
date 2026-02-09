@@ -10,17 +10,30 @@ User Request
 0. Read docs/design.md and docs/architecture.md
     ↓
 1. brainstorming (new features/ideas)
-    → Output: docs/plans/YYYY-MM-DD-<topic>-design.md
+    → Output: docs/designs/<feature>-design.md
     → Sync to Notion: product-scout/Designs/
     ↓
-2. using-git-worktrees (isolate work)
-    → Create isolated workspace for implementation
+2. Create branch docs/<feature> from main
+    → Commit + push design doc
     ↓
 3. writing-plans (create execution plan)
-    → Output: docs/plans/YYYY-MM-DD-<feature-name>.md
+    → Output: docs/plans/<feature>-plan.md
     → Sync to Notion: product-scout/Plans/
+    → Commit + push plan doc
     ↓
-4. Choose execution method:
+4. Create PR (docs/<feature> → main)
+    → Claude summarizes design + plan in PR description
+    → Wait for human approve
+    → Merge PR
+    ↓
+5. Create branch feat/<feature> from main
+    → using-git-worktrees if needed
+    ↓
+6. Choose execution method:
+   → Create: docs/plans/<feature>-progress.md
+   → Sync to Notion: product-scout/Plans/
+   → Update progress after each task completes
+
    A) subagent-driven-development (recommended, same session)
       - Fresh subagent per task
       - Two-stage review: spec compliance → code quality
@@ -31,12 +44,14 @@ User Request
       - Use when tasks are tightly coupled
       - Or when you want more manual control
     ↓
-5. finishing-a-development-branch
+7. finishing-a-development-branch
     → Verify tests → Present options (merge/PR/keep/discard)
     ↓
-6. Update documentation
-    → Local: docs/design.md, docs/architecture.md
-    → Notion: product-scout/Design, product-scout/Architecture
+8. Update documentation
+    → Review implementation, capture new insights and decisions
+    → docs/architecture.md: module responsibilities, data flow, technical decisions
+    → docs/design.md: mark completed items, update changed decisions, document trade-offs
+    → Sync to Notion: product-scout/Architecture, product-scout/Design
 ```
 
 ## Key Skills
@@ -44,10 +59,11 @@ User Request
 | Skill | When to Use |
 |-------|-------------|
 | brainstorming | New features, before any implementation |
-| using-git-worktrees | Isolate feature work from main |
 | writing-plans | Have requirements, need execution plan |
+| using-git-worktrees | Isolate feature work from main |
 | subagent-driven-development | Execute plan in same session |
 | executing-plans | Execute plan in separate session with checkpoints |
+| dispatching-parallel-agents | 2+ independent tasks with no shared state |
 | test-driven-development | Writing any code (RED-GREEN-REFACTOR) |
 | systematic-debugging | Bugs, test failures, unexpected behavior |
 | requesting-code-review | After major implementation |
@@ -59,5 +75,5 @@ User Request
 1. **Invoke skills before responding** - even for clarifying questions
 2. **Announce which skill you're using** - "I'm using [skill] to [purpose]"
 3. **Follow skills exactly** - especially rigid ones (TDD, debugging)
-4. **Sync to Notion** - any docs/ changes must sync to Notion
+4. **Sync to Notion** - every commit + push that touches docs/ must immediately sync the changed files to their corresponding Notion pages
 5. **Never skip TDD** - tests first, then implementation

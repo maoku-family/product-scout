@@ -10,14 +10,14 @@ User Request
 0. Read docs/design.md and docs/architecture.md
     ↓
 1. brainstorming (new features/ideas)
-    → Output: docs/designs/YYYY-MM-DD-<feature>-design.md
+    → Output: docs/designs/<feature>-design.md
     → Sync to Notion: product-scout/Designs/
     ↓
 2. Create branch docs/<feature> from main
     → Commit + push design doc
     ↓
 3. writing-plans (create execution plan)
-    → Output: docs/plans/YYYY-MM-DD-<feature>-plan.md
+    → Output: docs/plans/<feature>-plan.md
     → Sync to Notion: product-scout/Plans/
     → Commit + push plan doc
     ↓
@@ -30,7 +30,7 @@ User Request
     → using-git-worktrees if needed
     ↓
 6. Choose execution method:
-   → Create: docs/plans/YYYY-MM-DD-<feature>-progress.md
+   → Create: docs/plans/<feature>-progress.md
    → Sync to Notion: product-scout/Plans/
    → Update progress after each task completes
 

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Bun + TypeScript (strict), Zod v4, bun:sqlite, Playwright, Vitest, @notionhq/client, google-trends-api
 
-**Design Doc:** `docs/designs/2026-02-08-phase2-data-collection-design.md`
+**Design Doc:** `docs/designs/phase2-data-collection-design.md`
 
 ---
 

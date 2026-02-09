@@ -568,13 +568,24 @@ Both accept the same `Filter` type (from `getFiltersForRegion`).
 
 ## Group 12: Documentation
 
-### Task 12.1: Update docs
+### Task 12.1: Update docs with implementation insights
 
-- Modify: `docs/architecture.md` — replace TikTok/Apify model with FastMoss
-- Modify: `docs/design.md` — mark Phase 2 items complete
-- Sync both to Notion
+Review all implementation work and update docs with new insights gained during development:
 
-**Commit:** `docs: update architecture and design for phase 2`
+**`docs/architecture.md`:**
+- Replace TikTok/Apify data model with FastMoss pipeline
+- Document actual module responsibilities (each file's role)
+- Document data flow between modules (scraper → DB → filter → scorer → sync)
+- Add any new technical decisions made during implementation
+
+**`docs/design.md`:**
+- Mark Phase 2 items complete
+- Update any design decisions that changed during implementation
+- Document trade-offs discovered (e.g. scraping performance, API reliability)
+
+**Sync both to Notion:** product-scout/Architecture, product-scout/Design
+
+**Commit:** `docs: update architecture and design with phase 2 insights`
 
 ---
 

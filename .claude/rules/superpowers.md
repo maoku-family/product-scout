@@ -48,8 +48,10 @@ User Request
     → Verify tests → Present options (merge/PR/keep/discard)
     ↓
 8. Update documentation
-    → Local: docs/design.md, docs/architecture.md
-    → Notion: product-scout/Design, product-scout/Architecture
+    → Review implementation, capture new insights and decisions
+    → docs/architecture.md: module responsibilities, data flow, technical decisions
+    → docs/design.md: mark completed items, update changed decisions, document trade-offs
+    → Sync to Notion: product-scout/Architecture, product-scout/Design
 ```
 
 ## Key Skills

@@ -122,8 +122,8 @@ Test cases:
 - `price.min > price.max` rejects (refine)
 - `minUnitsSold` defaults to 100
 - `minGrowthRate` defaults to 0
-- Valid secrets config parses (fastmossEmail, fastmossPassword, cjApiKey, notionKey, notionDbId)
-- Missing `fastmossEmail` rejects
+- Valid secrets config parses (cjApiKey, notionKey, notionDbId)
+- Missing `cjApiKey` rejects
 
 **Step 2:** Run tests — verify FAIL
 
@@ -144,13 +144,13 @@ const RulesConfigSchema = z.object({
 });
 
 const SecretsConfigSchema = z.object({
-  fastmossEmail: z.string(),
-  fastmossPassword: z.string(),
   cjApiKey: z.string(),
   notionKey: z.string(),
   notionDbId: z.string(),
 });
 ```
+
+**Note:** FastMoss login uses Playwright persistent context (manual login, saved session). No FastMoss credentials in secrets.
 
 **Step 4:** Run tests — verify PASS
 
@@ -202,7 +202,7 @@ export function loadConfig<T>(filePath: string, schema: z.ZodType<T>): T {
 - Create: `config/regions.yaml`
 - Create: `config/categories.yaml`
 - Modify: `config/rules.yaml` — add `min_units_sold`, `min_growth_rate`
-- Modify: `config/secrets.yaml.example` — add fastmoss credentials, remove `apify_key`
+- Modify: `config/secrets.yaml.example` — remove `apify_key` and fastmoss credentials, keep cjApiKey/notionKey/notionDbId
 
 **Step 1:** Create config files matching schema (see design doc Section 3)
 
@@ -399,7 +399,8 @@ export function loadConfig<T>(filePath: string, schema: z.ZodType<T>): T {
 - Create: `test/mocks/playwright.ts` (mock Browser/Page factory)
 
 **Test cases (mocked Playwright):**
-- Login: navigates to login URL, fills email + password, clicks submit
+- Uses persistent context from `db/browser-data/` directory
+- Detects expired session (redirected to login page) and logs error
 - Applies region + category filters via URL params
 - Calls parser on page content
 - Respects >= 1s delay between page navigations

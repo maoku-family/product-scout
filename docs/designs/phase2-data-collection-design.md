@@ -69,10 +69,13 @@ Primary scraping target: `/e-commerce/saleslist` (Best-Selling Products)
 
 ### Login Requirement
 
-FastMoss requires login to view data. Playwright must:
-1. Login with credentials (stored in `config/secrets.yaml`)
-2. Maintain session cookies
-3. Navigate to ranking page with correct filters
+FastMoss requires login to view data. Login uses **Playwright persistent context**:
+1. First run: manually login in Playwright browser (phone SMS or WeChat)
+2. Session saved to local directory (`db/browser-data/`)
+3. Subsequent runs auto-load saved session — no login needed
+4. Session expired → manually login again
+
+No login credentials stored in `config/secrets.yaml`.
 
 ---
 
@@ -88,13 +91,11 @@ regions:
   th:
     name: Thailand
     currency: THB
-    shopee_domain: shopee.co.th
     language: th
     enabled: true
   id:
     name: Indonesia
     currency: IDR
-    shopee_domain: shopee.co.id
     language: id
     enabled: true
   # ph, vn, my...
@@ -107,8 +108,7 @@ regions:
 categories:
   beauty:
     name: "Beauty & Skincare"
-    fastmoss_category: "Beauty"    # FastMoss filter value
-    shopee_keywords:
+    searchKeywords:
       - "skincare"
       - "makeup"
       - "serum"
@@ -116,8 +116,7 @@ categories:
       - "moisturizer"
   home:
     name: "Home & Living"
-    fastmoss_category: "Home"
-    shopee_keywords:
+    searchKeywords:
       - "home gadget"
       - "organizer"
       - "kitchen tool"
@@ -125,14 +124,15 @@ categories:
       - "home decor"
   sports:
     name: "Sports & Outdoor"
-    fastmoss_category: "Sports"
-    shopee_keywords:
+    searchKeywords:
       - "fitness"
       - "yoga mat"
       - "resistance band"
       - "sports bottle"
       - "outdoor gear"
 ```
+
+**Design note:** Config schemas contain only generic business concepts. Platform-specific mappings (e.g. Shopee domain from region code, FastMoss category from category name) are handled inside each scraper/API module.
 
 ---
 

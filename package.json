@@ -35,6 +35,9 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@notionhq/client": "^5.9.0",
+    "google-trends-api": "^4.9.2",
+    "playwright": "^1.58.2",
     "yaml": "^2.8.2",
     "zod": "^4.3.6"
   }

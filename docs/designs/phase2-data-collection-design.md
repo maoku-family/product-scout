@@ -17,10 +17,11 @@ FastMoss proven sellers → Confirm profit → Ship it
 
 ```
 FastMoss Best-Selling Ranking (proven sellers)
-  → Rule filtering (category, price range)
+  → Pre-filter (min sales, growth, excluded categories)
   → Shopee validation (real sales, price)
   → Google Trends (trend signal)
   → CJ cost lookup (profit margin)
+  → Post-filter (price range, profit margin)
   → Score and rank
   → Push to Notion
 ```
@@ -231,34 +232,66 @@ Every scrape run:
 ### End-to-End Flow
 
 ```
-① Scrape     → Playwright login FastMoss, scrape ranking by region + category
-② Store      → INSERT into products table (append-only, one record per day)
-③ Filter     → Rule filtering (category, price range, min sales, growth > 0)
-④ Shopee     → Search product name on Shopee, validate sales and price
-⑤ Trends     → Google Trends query for trend status
-⑥ Cost       → CJ API lookup: purchase price + shipping cost → profit margin
-⑦ Score      → Weighted composite score (latest data)
-⑧ Store      → Write to candidates table
-⑨ Sync       → Push to Notion
+① Scrape       → Playwright login FastMoss, scrape ranking by region + category
+② Store        → INSERT into products table (append-only, one record per day)
+③ Pre-filter   → Rule filtering (min sales, growth > 0, excluded categories)
+④ Shopee       → Search product name on Shopee, validate sales and price
+⑤ Trends       → Google Trends query for trend status
+⑥ Cost         → CJ API lookup: purchase price + shipping cost → profit margin
+⑦ Post-filter  → Rule filtering (price range, profit margin)
+⑧ Score        → Weighted composite score (latest data)
+⑨ Store        → Write to candidates table
+⑩ Sync         → Push to Notion
 ```
+
+### Two-Stage Filtering
+
+Filter is split into two stages because some data is only available after external lookups:
+
+**Pre-filter (③ — after FastMoss scrape, before external requests):**
+- `minUnitsSold` — minimum sales on FastMoss
+- `minGrowthRate` — must be growing (not declining)
+- `excludedCategories` — blocked categories
+
+Purpose: Reduce external request volume. ~300 raw → ~100 after pre-filter.
+
+**Post-filter (⑦ — after Shopee + CJ data available):**
+- `price` (min/max) — requires Shopee price data
+- `profitMargin` (min) — requires CJ cost data
+
+Purpose: Ensure final candidates meet price and margin thresholds.
 
 ### Filtering Rules
 
 ```yaml
 # config/rules.yaml
-filters:
+defaults:
   price:
     min: 10          # USD
     max: 30
-  profit_margin:
+  profitMargin:
     min: 0.3         # 30%
-  min_units_sold: 100  # Minimum sales on FastMoss
-  min_growth_rate: 0   # Must be growing (not declining)
-  excluded_categories:
+  minUnitsSold: 100  # Minimum sales on FastMoss
+  minGrowthRate: 0   # Must be growing (not declining)
+  excludedCategories:
     - adult products
     - weapons
     - drugs
+
+# Per-region overrides (optional, deep-merged with defaults)
+regions:
+  th:
+    price:
+      min: 5
+      max: 25
+  id:
+    price:
+      min: 3
+      max: 15
+    minUnitsSold: 50
 ```
+
+Region is determined by CLI `--region` parameter, not in rules config. Each region can override any default filter value. Unspecified fields fall back to defaults.
 
 ### Daily Volume Estimate
 
@@ -267,9 +300,10 @@ FastMoss ranking: ~50-100 products per region + category
   × 3 categories (beauty, home, sports)
   × 2 regions (starting)
 = ~300-600 raw records/day
-  → After filtering: ~50-100 candidates
-  → Shopee validation: ~50-100 requests (1s interval, ~2 min)
-  → CJ queries: ~50-100 requests
+  → After pre-filter: ~100-200 candidates
+  → Shopee validation: ~100-200 requests (1s interval, ~3 min)
+  → CJ queries: ~100-200 requests
+  → After post-filter: ~50-100 candidates
   → Final to Notion: ~20-50 candidates
 ```
 

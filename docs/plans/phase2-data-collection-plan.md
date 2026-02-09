@@ -118,10 +118,14 @@ const CategoriesConfigSchema = z.object({
 **Step 1: Write failing tests**
 
 Test cases:
-- Valid rules config parses
-- `price.min > price.max` rejects (refine)
+- Valid rules config with defaults only parses
+- Valid rules config with region overrides parses
+- `price.min > price.max` in defaults rejects (refine)
 - `minUnitsSold` defaults to 100
 - `minGrowthRate` defaults to 0
+- Region override with partial fields parses (merges with defaults)
+- `getFiltersForRegion(rules, "th")` returns merged filters
+- `getFiltersForRegion(rules, "unknown")` returns defaults
 - Valid secrets config parses (cjApiKey, notionKey, notionDbId)
 - Missing `cjApiKey` rejects
 
@@ -130,17 +134,21 @@ Test cases:
 **Step 3: Implement**
 
 ```typescript
+const FilterSchema = z.object({
+  price: z.object({ min: z.number(), max: z.number() }),
+  profitMargin: z.object({ min: z.number() }),
+  minUnitsSold: z.number().default(100),
+  minGrowthRate: z.number().default(0),
+  excludedCategories: z.array(z.string()),
+});
+
+const RegionFilterOverrideSchema = FilterSchema.partial();
+
 const RulesConfigSchema = z.object({
-  region: z.string(),
-  filters: z.object({
-    price: z.object({ min: z.number(), max: z.number() }),
-    profitMargin: z.object({ min: z.number() }),
-    minUnitsSold: z.number().default(100),
-    minGrowthRate: z.number().default(0),
-    excludedCategories: z.array(z.string()),
-  }),
-}).refine(d => d.filters.price.min <= d.filters.price.max, {
-  message: "price.min must be <= price.max",
+  defaults: FilterSchema,
+  regions: z.record(z.string(), RegionFilterOverrideSchema).optional(),
+}).refine(d => d.defaults.price.min <= d.defaults.price.max, {
+  message: "defaults price.min must be <= price.max",
 });
 
 const SecretsConfigSchema = z.object({
@@ -148,6 +156,15 @@ const SecretsConfigSchema = z.object({
   notionKey: z.string(),
   notionDbId: z.string(),
 });
+```
+
+Helper function:
+
+```typescript
+export function getFiltersForRegion(rules: RulesConfig, region: string): Filter {
+  const regionOverride = rules.regions?.[region] ?? {};
+  return deepMerge(rules.defaults, regionOverride);
+}
 ```
 
 **Note:** FastMoss login uses Playwright persistent context (manual login, saved session). No FastMoss credentials in secrets.
@@ -201,7 +218,7 @@ export function loadConfig<T>(filePath: string, schema: z.ZodType<T>): T {
 **Files:**
 - Create: `config/regions.yaml`
 - Create: `config/categories.yaml`
-- Modify: `config/rules.yaml` — add `min_units_sold`, `min_growth_rate`
+- Modify: `config/rules.yaml` — restructure to `defaults` + optional `regions` overrides
 - Modify: `config/secrets.yaml.example` — remove `apify_key` and fastmoss credentials, keep cjApiKey/notionKey/notionDbId
 
 **Step 1:** Create config files matching schema (see design doc Section 3)
@@ -312,24 +329,34 @@ export function loadConfig<T>(filePath: string, schema: z.ZodType<T>): T {
 
 ## Group 4: Core — Filter
 
-### Task 4.1: Rule-based product filter
+### Task 4.1: Two-stage product filter
 
 **Files:**
 - Test: `test/unit/core/filter.test.ts`
 - Create: `src/core/filter.ts`
 
-**Test cases:**
-- Product meeting all rules passes
+**Test cases (pre-filter — uses FastMoss data only):**
+- Product meeting all pre-filter rules passes
 - Below `minUnitsSold` filtered out
 - Negative growth rate filtered (when `minGrowthRate = 0`)
 - Excluded category filtered out
 - Empty input returns empty output
-- Price below min or above max filtered (when Shopee data available)
+
+**Test cases (post-filter — uses Shopee + CJ data):**
+- Product with price in range passes
+- Price below min filtered out
+- Price above max filtered out
+- Profit margin below min filtered out
 - Products without Shopee price data pass through (not filtered by price)
+- Products without CJ cost data pass through (not filtered by margin)
 
-**Implementation:** Pure function. `filterProducts(products, rules): Product[]`
+**Implementation:** Two pure functions:
+- `preFilter(products, filters): Product[]` — runs after FastMoss scrape, before external requests
+- `postFilter(products, filters): Product[]` — runs after Shopee + CJ data available
 
-**Commit:** `feat: add rule-based product filter`
+Both accept the same `Filter` type (from `getFiltersForRegion`).
+
+**Commit:** `feat: add two-stage product filter`
 
 ---
 
@@ -513,9 +540,12 @@ export function loadConfig<T>(filePath: string, schema: z.ZodType<T>): T {
 - Create: `src/core/pipeline.ts`
 
 **Test cases (mock all scrapers + APIs):**
-- Runs in correct order: scrape → filter → shopee validate → trends → CJ cost → score → store → sync
+- Runs in correct order: scrape → store → pre-filter → shopee → trends → CJ cost → post-filter → score → store → sync
+- Pre-filter reduces products before external requests
+- Post-filter runs after Shopee + CJ data available
 - Scraper failure logs error, continues with partial data
-- Returns summary: { scraped, filtered, scored, synced }
+- Returns summary: { scraped, preFiltered, postFiltered, scored, synced }
+- Loads region-specific filters via `getFiltersForRegion(rules, region)`
 
 **Commit:** `feat: add pipeline orchestrator`
 

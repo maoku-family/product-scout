@@ -1,17 +1,28 @@
 # Filtering rules configuration
-# Adjust based on actual needs
+# Region is determined by CLI --region parameter
+# Per-region overrides are deep-merged with defaults
 
-region: th  # Target region: th=Thailand, vn=Vietnam, my=Malaysia
-
-filters:
+defaults:
   price:
     min: 10   # Minimum price (USD)
     max: 30   # Maximum price (USD)
-
-  profit_margin:
+  profitMargin:
     min: 0.3  # Minimum profit margin 30%
-
-  excluded_categories:
+  minUnitsSold: 100  # Minimum sales on FastMoss
+  minGrowthRate: 0   # Must be growing (not declining)
+  excludedCategories:
     - adult products
     - weapons
     - drugs
+
+# Per-region overrides (optional)
+# regions:
+#   th:
+#     price:
+#       min: 5
+#       max: 25
+#   id:
+#     price:
+#       min: 3
+#       max: 15
+#     minUnitsSold: 50

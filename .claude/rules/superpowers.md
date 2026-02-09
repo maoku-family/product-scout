@@ -13,14 +13,23 @@ User Request
     → Output: docs/designs/YYYY-MM-DD-<feature>-design.md
     → Sync to Notion: product-scout/Designs/
     ↓
-2. using-git-worktrees (isolate work)
-    → Create isolated workspace for implementation
+2. Create branch docs/<feature> from main
+    → Commit + push design doc
     ↓
 3. writing-plans (create execution plan)
     → Output: docs/plans/YYYY-MM-DD-<feature>-plan.md
     → Sync to Notion: product-scout/Plans/
+    → Commit + push plan doc
     ↓
-4. Choose execution method:
+4. Create PR (docs/<feature> → main)
+    → Claude summarizes design + plan in PR description
+    → Wait for human approve
+    → Merge PR
+    ↓
+5. Create branch feat/<feature> from main
+    → using-git-worktrees if needed
+    ↓
+6. Choose execution method:
    A) subagent-driven-development (recommended, same session)
       - Fresh subagent per task
       - Two-stage review: spec compliance → code quality
@@ -31,10 +40,10 @@ User Request
       - Use when tasks are tightly coupled
       - Or when you want more manual control
     ↓
-5. finishing-a-development-branch
+7. finishing-a-development-branch
     → Verify tests → Present options (merge/PR/keep/discard)
     ↓
-6. Update documentation
+8. Update documentation
     → Local: docs/design.md, docs/architecture.md
     → Notion: product-scout/Design, product-scout/Architecture
 ```
@@ -44,10 +53,11 @@ User Request
 | Skill | When to Use |
 |-------|-------------|
 | brainstorming | New features, before any implementation |
-| using-git-worktrees | Isolate feature work from main |
 | writing-plans | Have requirements, need execution plan |
+| using-git-worktrees | Isolate feature work from main |
 | subagent-driven-development | Execute plan in same session |
 | executing-plans | Execute plan in separate session with checkpoints |
+| dispatching-parallel-agents | 2+ independent tasks with no shared state |
 | test-driven-development | Writing any code (RED-GREEN-REFACTOR) |
 | systematic-debugging | Bugs, test failures, unexpected behavior |
 | requesting-code-review | After major implementation |

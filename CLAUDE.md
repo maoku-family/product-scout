@@ -12,7 +12,7 @@ Bun + TypeScript + Zod + SQLite + Playwright + Apify
 bun install          # Install dependencies
 bun run lint         # Lint + fix
 bun test             # Run tests
-bun run scripts/scout.ts --region th   # Run product selection
+bun run scripts/scout.ts --region th --limit 10  # Run product selection (limit 10 products)
 bun run scripts/status.ts              # Check status
 bun run scripts/top.ts --limit 10      # Top N candidates
 ```

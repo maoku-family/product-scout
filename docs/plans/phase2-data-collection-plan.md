@@ -543,6 +543,7 @@ Both accept the same `Filter` type (from `getFiltersForRegion`).
 - Runs in correct order: scrape → store → pre-filter → shopee → trends → CJ cost → post-filter → score → store → sync
 - Pre-filter reduces products before external requests
 - Post-filter runs after Shopee + CJ data available
+- `limit` option caps the number of products scraped from FastMoss
 - Scraper failure logs error, continues with partial data
 - Returns summary: { scraped, preFiltered, postFiltered, scored, synced }
 - Loads region-specific filters via `getFiltersForRegion(rules, region)`
@@ -554,7 +555,7 @@ Both accept the same `Filter` type (from `getFiltersForRegion`).
 ### Task 11.2: CLI scripts
 
 **Files:**
-- Create: `scripts/scout.ts` — `--region`, `--category`, `--dry-run`
+- Create: `scripts/scout.ts` — `--region`, `--category`, `--limit N`, `--dry-run`
 - Create: `scripts/status.ts` — last scrape, counts by region, unsynced count
 - Create: `scripts/top.ts` — `--limit N`, table output
 
@@ -609,7 +610,7 @@ After all tasks complete:
 
 1. **Unit tests:** `bun run test` — all pass
 2. **Lint:** `bun run lint:check` — no errors
-3. **Dry run:** `bun run scripts/scout.ts --region th --dry-run` — pipeline runs, skips Notion sync
+3. **Dry run:** `bun run scripts/scout.ts --region th --limit 10 --dry-run` — pipeline runs with 10 products, skips Notion sync
 4. **Status check:** `bun run scripts/status.ts` — shows data summary
 5. **Top candidates:** `bun run scripts/top.ts --limit 5` — shows scored results
 

@@ -30,6 +30,10 @@ User Request
     → using-git-worktrees if needed
     ↓
 6. Choose execution method:
+   → Create: docs/plans/YYYY-MM-DD-<feature>-progress.md
+   → Sync to Notion: product-scout/Plans/
+   → Update progress after each task completes
+
    A) subagent-driven-development (recommended, same session)
       - Fresh subagent per task
       - Two-stage review: spec compliance → code quality

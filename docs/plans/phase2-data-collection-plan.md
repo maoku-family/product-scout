@@ -66,11 +66,11 @@ bun add playwright @notionhq/client google-trends-api
 **Step 1: Write failing tests**
 
 Test cases:
-- Valid region config parses (name, currency, shopeeDomain, language, enabled)
+- Valid region config parses (name, currency, language, enabled)
 - Missing required field rejects
 - `enabled` defaults to `true`
-- Valid category config parses (name, fastmossCategory, shopeeKeywords)
-- Empty `shopeeKeywords` array rejects (min 1)
+- Valid category config parses (name, searchKeywords)
+- Empty `searchKeywords` array rejects (min 1)
 
 **Step 2:** Run `bun run test test/unit/schemas/config.test.ts` — verify FAIL
 
@@ -83,7 +83,6 @@ import { z } from "zod";
 const RegionSchema = z.object({
   name: z.string(),
   currency: z.string(),
-  shopeeDomain: z.string(),
   language: z.string(),
   enabled: z.boolean().default(true),
 });
@@ -94,14 +93,15 @@ const RegionsConfigSchema = z.object({
 
 const CategorySchema = z.object({
   name: z.string(),
-  fastmossCategory: z.string(),
-  shopeeKeywords: z.array(z.string()).min(1),
+  searchKeywords: z.array(z.string()).min(1),
 });
 
 const CategoriesConfigSchema = z.object({
   categories: z.record(z.string(), CategorySchema),
 });
 ```
+
+**Design note:** Config schemas contain only generic business concepts. Platform-specific mappings (e.g. Shopee domain, FastMoss category name) are handled inside each scraper/API module.
 
 **Step 4:** Run tests — verify PASS
 
@@ -435,7 +435,7 @@ export function loadConfig<T>(filePath: string, schema: z.ZodType<T>): T {
 - Modify: `src/scrapers/shopee.ts`
 
 **Test cases (mocked Playwright):**
-- Constructs correct URL: `https://{shopeeDomain}/search?keyword={query}`
+- Constructs correct URL using internal domain mapping (e.g. `th` → `shopee.co.th`)
 - Respects 1s delay
 - Returns top N results
 - On block/captcha: logs warning, returns empty (graceful degradation)

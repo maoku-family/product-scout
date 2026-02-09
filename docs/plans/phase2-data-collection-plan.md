@@ -430,6 +430,7 @@ Both accept the same `Filter` type (from `getFiltersForRegion`).
 - Detects expired session (redirected to login page) and logs error
 - Applies region + category filters via URL params
 - Calls parser on page content
+- `limit` option stops scraping after N products (avoids unnecessary page loads)
 - Respects >= 1s delay between page navigations
 - Wraps navigation with `withRetry`
 - Auto-throttle on 429 (increase delay to 5s)

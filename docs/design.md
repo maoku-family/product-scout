@@ -64,16 +64,7 @@ FastMoss SEA → Shopee Validation → Google Trends → CJ Cost → Rule Filter
 | **Google Trends SEA** | google-trends-api (90-day window) | Keyword search trends | Supplementary trend signal (10% weight) | On-demand |
 | **CJ Dropshipping** | Official REST API (POST search) | Product cost, shipping ($3 default), inventory | Cost calculation | On-demand |
 
-### Key Data Source Decisions
-
-| Original Plan | Actual Implementation | Reason |
-|---------------|----------------------|--------|
-| Apify for TikTok data | FastMoss persistent context with system Chrome | Apify lacked SEA coverage; FastMoss provides direct ranking data with GMV, growth rate, commission |
-| Playwright bundled Chromium | System Chrome via `channel: "chrome"` | Playwright's bundled Chromium is blocked by FastMoss WAF (Tencent EdgeOne). Using system Chrome via `launchPersistentContext({ channel: "chrome" })` is undetectable |
-| CDP bridge (`connectOverCDP`) | Persistent context (`launchPersistentContext`) | CDP bridge fails under Bun due to WebSocket incompatibility. Persistent context works natively and manages Chrome lifecycle automatically |
-| Regex HTML parsing | DOM extraction via `page.evaluate()` | FastMoss uses React + Ant Design (dynamic rendering). DOM API is more reliable than regex on SPA HTML |
-| Shopee Playwright scraper | Shopee direct API fetch | Shopee has a public search API; direct fetch is faster, more reliable, avoids browser overhead |
-| Real-time shipping costs | $3 USD default estimate | Actual CJ shipping varies by product/destination; $3 is a reasonable SEA average for lightweight items |
+> For detailed technical decisions and rationale, see [architecture.md §7 — Key Technical Decisions](./architecture.md#7-key-technical-decisions).
 
 ---
 
@@ -100,7 +91,7 @@ profitMargin:
   min: 0.3                 # 30% minimum margin (shopeePrice - cjPrice - shipping) / shopeePrice
 ```
 
-**Region overrides** (e.g., Thailand uses price 5-25, Indonesia uses price 3-15 + minUnitsSold 50).
+Per-region overrides supported (see [architecture.md §8](./architecture.md#8-configuration-system) for details).
 Post-filter gracefully skips checks when enrichment data is missing (e.g., no Shopee match found).
 
 ### Composite Scoring
@@ -172,22 +163,24 @@ Post-filter gracefully skips checks when enrichment data is missing (e.g., no Sh
 
 | Item | Resolution |
 |------|------------|
-| Specific SEA country selection | TH and ID enabled by default; PH, VN, MY available but disabled. Per-region config overrides supported. |
-| Apify TikTok SEA support | **Abandoned** — Apify lacked SEA coverage. Replaced with FastMoss Playwright scraper. |
-| Shopee anti-scraping strategy | Using direct API fetch (not browser scraping). Graceful degradation returns `[]` on block. Rate limiting via sequential processing. |
-| SEA price range research | Default $10-30 USD range with per-region overrides (TH: $5-25, ID: $3-15). |
-| CJ SEA shipping time/cost | Using $3 USD flat estimate for all SEA regions. Actual cost varies but this is sufficient for screening. |
+| Specific SEA country selection | TH and ID enabled; PH, VN, MY available but disabled. See [architecture.md §8](./architecture.md#8-configuration-system) for details. |
+| Apify TikTok SEA support | **Abandoned** — replaced with FastMoss. |
+| Shopee anti-scraping strategy | Using direct API fetch with graceful degradation. |
+| SEA price range research | Default $10-30 USD with per-region overrides. |
+| CJ SEA shipping time/cost | Using $3 USD flat estimate. |
 
 ### Risks and Mitigation
 
+> For error handling and graceful degradation details, see [architecture.md §3 — Design Principles](./architecture.md#3-design-principles).
+
 | Risk | Level | Mitigation | Status |
 |------|-------|------------|--------|
-| Shopee anti-scraping | Medium | Direct API (not browser), rate limiting, graceful `[]` degradation | Mitigated |
-| FastMoss WAF blocking | High | System Chrome via `launchPersistentContext({ channel: "chrome" })`, non-headless mode | Mitigated |
-| FastMoss session expiry | Medium | Persistent profile (`~/.product-scout-chrome`) preserves login, redirect detection, manual re-login on first run | Mitigated |
-| Google Trends rate limiting | Low | Falls back to "stable" (50 pts), only 10% weight | Mitigated |
-| Notion API rate limiting | Low | Sequential page creation, continues on individual failure | Mitigated |
-| Inaccurate filtering rules | Expected | Per-region config overrides, iterate through practice | Ongoing |
+| Shopee anti-scraping | Medium | Direct API + graceful degradation | Mitigated |
+| FastMoss WAF blocking | High | System Chrome + non-headless mode | Mitigated |
+| FastMoss session expiry | Medium | Persistent profile + redirect detection | Mitigated |
+| Google Trends rate limiting | Low | Fallback to "stable", only 10% weight | Mitigated |
+| Notion API rate limiting | Low | Sequential creation, continues on failure | Mitigated |
+| Inaccurate filtering rules | Expected | Per-region overrides, iterate through practice | Ongoing |
 
 ### Known Issues
 

@@ -103,14 +103,15 @@ product-scout/
 - Prevents dirty data from entering database
 
 **Error Handling:**
-- All network requests wrapped with `withRetry` (3 retries, 1s base delay, linear backoff: 1s, 2s, 3s)
-- Clear error logging before throwing
-- Graceful degradation by priority:
+- `withRetry` used on critical external calls:
+  - CJ API: 3 retries, 1s base delay, linear backoff (1s, 2s, 3s)
+  - FastMoss: 3 retries, 2s base delay, linear backoff (2s, 4s, 6s)
+- Graceful degradation (no retry) for non-critical sources:
   - Shopee: returns `[]` on block/error (pipeline continues without price validation)
   - Google Trends: returns `"stable"` on any error (10% weight, non-critical)
-  - CJ: returns `null` on no match (skip cost data, affects profit margin only)
-  - FastMoss: throws on session expired (requires manual re-login, cannot degrade)
   - Notion sync: continues on individual page creation failure (logs error, processes remaining)
+- FastMoss: throws on session expired (requires manual re-login, cannot degrade)
+- Clear error logging before throwing
 
 **Pipeline Design:**
 - Products are processed **sequentially** (not in parallel) to respect rate limits on external APIs
@@ -169,7 +170,9 @@ Vitest runs outside of Bun runtime, so `bun:sqlite` is not available. The projec
 
 ```
 # vitest.config.ts
-resolve.alias: { "bun:sqlite": "./test/shims/bun-sqlite.ts" }
+resolve.alias: [
+  { find: "bun:sqlite", replacement: "./test/shims/bun-sqlite.ts" }
+]
 ```
 
 The shim wraps `better-sqlite3` (dev dependency) to match `bun:sqlite`'s API surface. This means:
@@ -185,30 +188,31 @@ test/
 ├── unit/                    # Pure function tests (no external deps)
 │   ├── schemas/             # Zod schema validation tests
 │   ├── core/                # Filter, scorer, sync, pipeline tests
-│   ├── scrapers/            # HTML/JSON parser tests
+│   ├── scrapers/            # Scraper tests (mocked Playwright/fetch)
 │   ├── api/                 # API client tests (mocked fetch)
-│   ├── db/                  # Query tests (in-memory SQLite)
-│   └── config/              # Config loader tests
+│   ├── db/                  # Schema + query tests (in-memory SQLite)
+│   ├── config/              # Config loader tests
+│   └── utils/               # Utility function tests
 ├── integration/             # Tests with real file I/O
 │   └── config/              # YAML loading with real files
 ├── fixtures/                # Test data files
-│   ├── fastmoss/            # HTML fixtures
 │   ├── shopee/              # JSON fixtures
 │   └── config/              # YAML fixtures
 └── shims/
     └── bun-sqlite.ts        # better-sqlite3 → bun:sqlite shim
 ```
 
-### Test Coverage: 163 tests across 17 files
+### Test Coverage: 172 tests across 18 files
 
 | Module | Test Count | Key Patterns |
 |--------|-----------|--------------|
 | Schemas (5 files) | 50 | Valid/invalid inputs, boundary values, defaults |
 | Core (4 files) | ~45 | Pure function testing, mock DB for pipeline |
-| Scrapers (2 files) | ~20 | HTML/JSON fixture parsing, edge cases |
+| Scrapers (2 files) | ~20 | Mocked Playwright/fetch, edge cases |
 | APIs (2 files) | ~15 | Mocked `globalThis.fetch`, error handling |
-| DB (1 file) | ~15 | In-memory SQLite, CRUD operations |
-| Config (2 files) | ~18 | Valid/invalid YAML, deep merge logic |
+| DB (2 files) | ~15 | In-memory SQLite, schema init, CRUD operations |
+| Config (2 files) | ~10 | Valid/invalid YAML, deep merge logic |
+| Utils (1 file) | ~8 | Chinese number parsing (万/亿) |
 
 ---
 
@@ -365,7 +369,7 @@ scripts/scout.ts
 ## 9. Code Quality Checklist
 
 - [x] All external data validated with Zod
-- [x] All network requests have retry mechanism
+- [x] Critical network requests have retry mechanism (CJ, FastMoss); others use graceful degradation
 - [x] Errors have clear logs
 - [x] Core logic has unit tests
 - [x] TypeScript strict mode passes

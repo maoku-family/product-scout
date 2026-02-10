@@ -20,7 +20,7 @@ export async function withRetry<T>(
         throw error;
       }
       logger.warn(`Retry ${String(i + 1)}/${String(maxRetries)}`, error);
-      await sleep(delay * (i + 1)); // exponential backoff
+      await sleep(delay * (i + 1)); // linear backoff: 1x, 2x, 3x
     }
   }
   throw new Error("Unreachable");

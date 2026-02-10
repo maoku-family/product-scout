@@ -139,13 +139,11 @@ Post-filter gracefully skips checks when enrichment data is missing (e.g., no Sh
 | 1 | Data Matching | CJ product matching is inaccurate — uses raw product name (possibly Thai/Vietnamese) to search CJ (English), takes first result without similarity check | Profit margin may be unreliable | Open |
 | 2 | Data Matching | Shopee matching has the same problem — keyword search takes first result without verifying it's the same product | Price/sales validation may reference wrong product | Open |
 | 3 | Data Matching | Google Trends keyword mismatch — non-English product names may return no data, falls back to "stable" (50 pts) | Trend signal unreliable for non-English; 10% weight limits impact | Open |
-| 4 | Runtime | FastMoss requires manual login — first run and session expiry require manually logging in via Chrome | Cannot fully automate; blocks unattended scheduled runs | Open |
-| 5 | Runtime | Non-headless mode required — FastMoss WAF blocks headless Chrome | Cannot run on headless servers (CI/CD, cloud VMs) | Open |
-| 6 | Data Quality | Shipping cost is a fixed $3 estimate — actual cost varies by country, weight, and logistics channel | Profit margin calculation is approximate | Open |
-| 7 | Data Quality | Shopee API returns 403 intermittently — graceful degradation returns `[]`, but loses validation data | Products may pass filtering without Shopee validation | Mitigated |
-| 8 | Functionality | Notion duplicate sync — each pipeline run creates new pages, no dedup or update mechanism | Duplicate entries accumulate in Notion | Open |
-| 9 | Functionality | No scheduled execution — Phase 4 not yet implemented, CLI-only | Requires manual trigger daily | Open |
-| 10 | Functionality | No multi-region parallel runs — regions must be run sequentially | Slower for multi-country scouting | Open |
+| 4 | Data Quality | Shipping cost is a fixed $3 estimate — actual cost varies by country, weight, and logistics channel | Profit margin calculation is approximate | Open |
+| 5 | Data Quality | Shopee API returns 403 intermittently — consider switching to Playwright for better anti-detection | Products may pass filtering without Shopee validation | Open |
+| 6 | Functionality | Notion duplicate sync — each pipeline run creates new pages, no dedup or update mechanism | Duplicate entries accumulate in Notion | Open |
+| 7 | Functionality | No scheduled execution — Phase 3 not yet implemented, CLI-only | Requires manual trigger daily | Open |
+| 8 | Functionality | No multi-region parallel runs — regions must be run sequentially | Slower for multi-country scouting | Open |
 
 ### MVP Success Criteria
 

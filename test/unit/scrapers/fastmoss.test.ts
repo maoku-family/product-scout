@@ -107,21 +107,22 @@ describe("transformRawRows", () => {
   });
 });
 
-// --- scrapeFastmoss tests (mocked CDP connection) ---
+// --- scrapeFastmoss tests (mocked persistent context) ---
 
 vi.mock("playwright", () => ({
   chromium: {
-    connectOverCDP: vi.fn(),
+    launchPersistentContext: vi.fn(),
   },
 }));
 
 const playwrightMod: typeof import("playwright") = await import("playwright");
 // eslint-disable-next-line @typescript-eslint/unbound-method
-const { connectOverCDP } = playwrightMod.chromium;
-// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-const mockConnectOverCDP = connectOverCDP as unknown as ReturnType<
-  typeof vi.fn
->;
+const { launchPersistentContext } = playwrightMod.chromium;
+
+/* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- mock cast */
+const mockLaunchPersistentContext =
+  launchPersistentContext as unknown as ReturnType<typeof vi.fn>;
+/* eslint-enable @typescript-eslint/no-unsafe-type-assertion */
 
 type MockPage = {
   goto: ReturnType<typeof vi.fn>;
@@ -134,10 +135,6 @@ type MockPage = {
 
 type MockContext = {
   newPage: ReturnType<typeof vi.fn>;
-};
-
-type MockBrowser = {
-  contexts: ReturnType<typeof vi.fn>;
   close: ReturnType<typeof vi.fn>;
 };
 
@@ -158,19 +155,16 @@ function createMockPage(
   };
 }
 
-function createMockBrowser(mockPage: MockPage): MockBrowser {
-  const mockContext: MockContext = {
-    newPage: vi.fn().mockResolvedValue(mockPage),
-  };
+function createMockContext(mockPage: MockPage): MockContext {
   return {
-    contexts: vi.fn().mockReturnValue([mockContext]),
+    newPage: vi.fn().mockResolvedValue(mockPage),
     close: vi.fn().mockResolvedValue(undefined),
   };
 }
 
-function setupMock(mockBrowser: MockBrowser): void {
+function setupMock(mockContext: MockContext): void {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-  mockConnectOverCDP.mockResolvedValueOnce(mockBrowser as never);
+  mockLaunchPersistentContext.mockResolvedValueOnce(mockContext as never);
 }
 
 describe("scrapeFastmoss", () => {
@@ -178,32 +172,44 @@ describe("scrapeFastmoss", () => {
     vi.restoreAllMocks();
   });
 
-  it("connects to Chrome via CDP", async () => {
+  it("launches Chrome with persistent context", async () => {
     const mockPage = createMockPage();
-    const mockBrowser = createMockBrowser(mockPage);
-    setupMock(mockBrowser);
+    const mockContext = createMockContext(mockPage);
+    setupMock(mockContext);
 
     await scrapeFastmoss({ region: "th" });
 
-    expect(mockConnectOverCDP).toHaveBeenCalledWith("http://127.0.0.1:9222");
+    expect(mockLaunchPersistentContext).toHaveBeenCalledWith(
+      expect.stringContaining(".product-scout-chrome"),
+      expect.objectContaining({
+        channel: "chrome",
+        headless: false,
+      }),
+    );
   });
 
-  it("accepts custom CDP URL", async () => {
+  it("accepts custom profile directory", async () => {
     const mockPage = createMockPage();
-    const mockBrowser = createMockBrowser(mockPage);
-    setupMock(mockBrowser);
+    const mockContext = createMockContext(mockPage);
+    setupMock(mockContext);
 
-    await scrapeFastmoss({ region: "th", cdpUrl: "http://localhost:9333" });
+    await scrapeFastmoss({
+      region: "th",
+      profileDir: "/tmp/test-profile",
+    });
 
-    expect(mockConnectOverCDP).toHaveBeenCalledWith("http://localhost:9333");
+    expect(mockLaunchPersistentContext).toHaveBeenCalledWith(
+      "/tmp/test-profile",
+      expect.anything(),
+    );
   });
 
   it("detects expired session (redirected to login page)", async () => {
     const mockPage = createMockPage({
       url: "https://www.fastmoss.com/login",
     });
-    const mockBrowser = createMockBrowser(mockPage);
-    setupMock(mockBrowser);
+    const mockContext = createMockContext(mockPage);
+    setupMock(mockContext);
 
     await expect(scrapeFastmoss({ region: "th" })).rejects.toThrow(
       /session.*expired|login/i,
@@ -223,8 +229,8 @@ describe("scrapeFastmoss", () => {
       },
     ];
     const mockPage = createMockPage({ rawRows });
-    const mockBrowser = createMockBrowser(mockPage);
-    setupMock(mockBrowser);
+    const mockContext = createMockContext(mockPage);
+    setupMock(mockContext);
 
     const products = await scrapeFastmoss({ region: "th" });
 
@@ -233,25 +239,25 @@ describe("scrapeFastmoss", () => {
     expect(mockPage.evaluate).toHaveBeenCalled();
   });
 
-  it("disconnects from CDP after scraping", async () => {
+  it("closes context after scraping", async () => {
     const mockPage = createMockPage();
-    const mockBrowser = createMockBrowser(mockPage);
-    setupMock(mockBrowser);
+    const mockContext = createMockContext(mockPage);
+    setupMock(mockContext);
 
     await scrapeFastmoss({ region: "th" });
 
-    expect(mockBrowser.close).toHaveBeenCalled();
+    expect(mockContext.close).toHaveBeenCalled();
   });
 
-  it("disconnects from CDP even on error", async () => {
+  it("closes context even on error", async () => {
     const mockPage = createMockPage({
       url: "https://www.fastmoss.com/login",
     });
-    const mockBrowser = createMockBrowser(mockPage);
-    setupMock(mockBrowser);
+    const mockContext = createMockContext(mockPage);
+    setupMock(mockContext);
 
     await expect(scrapeFastmoss({ region: "th" })).rejects.toThrow();
-    expect(mockBrowser.close).toHaveBeenCalled();
+    expect(mockContext.close).toHaveBeenCalled();
   });
 
   it("applies limit to results", async () => {
@@ -265,8 +271,8 @@ describe("scrapeFastmoss", () => {
       gmv: String(200 + i),
     }));
     const mockPage = createMockPage({ rawRows });
-    const mockBrowser = createMockBrowser(mockPage);
-    setupMock(mockBrowser);
+    const mockContext = createMockContext(mockPage);
+    setupMock(mockContext);
 
     const products = await scrapeFastmoss({ region: "th", limit: 2 });
     expect(products).toHaveLength(2);
@@ -274,8 +280,8 @@ describe("scrapeFastmoss", () => {
 
   it("navigates to correct URL with region and category", async () => {
     const mockPage = createMockPage();
-    const mockBrowser = createMockBrowser(mockPage);
-    setupMock(mockBrowser);
+    const mockContext = createMockContext(mockPage);
+    setupMock(mockContext);
 
     await scrapeFastmoss({ region: "vn", category: "beauty" });
 
@@ -284,11 +290,13 @@ describe("scrapeFastmoss", () => {
     expect(gotoCall).toContain("category=beauty");
   });
 
-  it("throws clear error when CDP connection fails", async () => {
-    mockConnectOverCDP.mockRejectedValueOnce(new Error("Connection refused"));
+  it("throws when launchPersistentContext fails", async () => {
+    mockLaunchPersistentContext.mockRejectedValueOnce(
+      new Error("Failed to launch"),
+    );
 
     await expect(scrapeFastmoss({ region: "th" })).rejects.toThrow(
-      /Cannot connect to Chrome/,
+      /Failed to launch/,
     );
   });
 });

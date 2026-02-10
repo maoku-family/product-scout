@@ -1,3 +1,6 @@
+import { homedir } from "node:os";
+import { resolve } from "node:path";
+
 import { chromium } from "playwright";
 
 import { FastmossProductSchema } from "@/schemas/product";
@@ -7,13 +10,14 @@ import { parseChineseNumber } from "@/utils/parse-chinese-number";
 import { withRetry } from "@/utils/retry";
 
 const FASTMOSS_BASE_URL = "https://www.fastmoss.com/e-commerce/saleslist";
-const CDP_URL = "http://127.0.0.1:9222";
+const DEFAULT_PROFILE_DIR = resolve(homedir(), ".product-scout-chrome");
 
 export type FastmossScrapeOptions = {
   region: string;
   category?: string;
   limit?: number;
-  cdpUrl?: string;
+  /** Custom profile directory for Chrome persistent context */
+  profileDir?: string;
 };
 
 /**
@@ -140,41 +144,34 @@ export function transformRawRows(
 }
 
 /**
- * Scrape FastMoss ranking page by connecting to a running Chrome via CDP.
+ * Scrape FastMoss ranking page using system Chrome with a persistent profile.
  *
- * Prerequisites:
- * 1. Chrome must be running with: --remote-debugging-port=9222
- * 2. User must be logged into FastMoss in that Chrome
+ * Uses Playwright's launchPersistentContext with `channel: "chrome"` to:
+ * - Use the system Chrome browser (avoids WAF blocking Playwright's Chromium)
+ * - Preserve login sessions via the persistent profile directory
+ * - No need for a separate Chrome CDP launcher script
  *
- * Use `bun run scripts/chrome.ts` to launch Chrome with the correct flags.
+ * First run: User needs to login to FastMoss in the launched Chrome window.
+ * Subsequent runs: Login session is preserved in the profile.
  */
 export async function scrapeFastmoss(
   options: FastmossScrapeOptions,
 ): Promise<FastmossProduct[]> {
-  const cdpUrl = options.cdpUrl ?? CDP_URL;
+  const profileDir = options.profileDir ?? DEFAULT_PROFILE_DIR;
 
-  let browser;
-  try {
-    browser = await withRetry(() => chromium.connectOverCDP(cdpUrl), {
-      maxRetries: 3,
-      delay: 2000,
-    });
-  } catch (error) {
-    logger.error(
-      "Failed to connect to Chrome via CDP. Is Chrome running with --remote-debugging-port=9222?",
-      error,
-    );
-    throw new Error(
-      "Cannot connect to Chrome. Please run: bun run scripts/chrome.ts",
-    );
-  }
+  logger.info("Launching Chrome with persistent profile", { profileDir });
+
+  const context = await withRetry(
+    () =>
+      chromium.launchPersistentContext(profileDir, {
+        channel: "chrome",
+        headless: false,
+        timeout: 30000,
+      }),
+    { maxRetries: 3, delay: 2000 },
+  );
 
   try {
-    const context = browser.contexts()[0];
-    if (!context) {
-      throw new Error("No browser context found in Chrome");
-    }
-
     const page = await context.newPage();
 
     // Build URL with region filter
@@ -229,7 +226,6 @@ export async function scrapeFastmoss(
 
     return products;
   } finally {
-    // Disconnect from CDP — does NOT close Chrome
-    await browser.close();
+    await context.close();
   }
 }

@@ -1,17 +1,23 @@
-# Filtering rules configuration
-# Adjust based on actual needs
-
-region: th  # Target region: th=Thailand, vn=Vietnam, my=Malaysia
-
-filters:
+defaults:
   price:
-    min: 10   # Minimum price (USD)
-    max: 30   # Maximum price (USD)
-
-  profit_margin:
-    min: 0.3  # Minimum profit margin 30%
-
-  excluded_categories:
+    min: 10
+    max: 30
+  profitMargin:
+    min: 0.3
+  minUnitsSold: 100
+  minGrowthRate: 0
+  excludedCategories:
     - adult products
     - weapons
     - drugs
+
+regions:
+  th:
+    price:
+      min: 5
+      max: 25
+  id:
+    price:
+      min: 3
+      max: 15
+    minUnitsSold: 50

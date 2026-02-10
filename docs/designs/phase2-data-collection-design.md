@@ -1,5 +1,7 @@
 # Phase 2: Data Collection Design
 
+> **Status: Archived** — This is a historical design document. The implementation may differ from what's described here. For the current state, refer to [design.md](../design.md) and [architecture.md](../architecture.md).
+
 > Product Scout's data collection strategy.
 > Use proven sales data from FastMoss to find products that already sell, then validate with Shopee, Google Trends, and CJ cost data.
 

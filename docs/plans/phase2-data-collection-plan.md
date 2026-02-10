@@ -1,5 +1,7 @@
 # Phase 2: Data Collection — Implementation Plan
 
+> **Status: Archived** — This is a historical plan document. The implementation may differ from what's described here. For the current state, refer to [design.md](../design.md) and [architecture.md](../architecture.md).
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Build the full data collection pipeline: FastMoss scraping → rule filtering → Shopee validation → Google Trends → CJ cost → scoring → Notion sync.

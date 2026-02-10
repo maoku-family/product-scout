@@ -17,7 +17,9 @@
   },
   "prettier": {},
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "latest",
+    "better-sqlite3": "^12.6.2",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-check-file": "^3.3.1",
@@ -35,6 +37,9 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@notionhq/client": "^5.9.0",
+    "google-trends-api": "^4.9.2",
+    "playwright": "^1.58.2",
     "yaml": "^2.8.2",
     "zod": "^4.3.6"
   }

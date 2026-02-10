@@ -1,0 +1,25 @@
+categories:
+  beauty:
+    name: "Beauty & Skincare"
+    searchKeywords:
+      - "skincare"
+      - "makeup"
+      - "serum"
+      - "sunscreen"
+      - "moisturizer"
+  home:
+    name: "Home & Living"
+    searchKeywords:
+      - "home gadget"
+      - "organizer"
+      - "kitchen tool"
+      - "cleaning"
+      - "home decor"
+  sports:
+    name: "Sports & Outdoor"
+    searchKeywords:
+      - "fitness"
+      - "yoga mat"
+      - "resistance band"
+      - "sports bottle"
+      - "outdoor gear"

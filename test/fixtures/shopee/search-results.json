@@ -1,0 +1,43 @@
+{
+  "items": [
+    {
+      "item_basic": {
+        "itemid": 12345678,
+        "name": "LED Ring Light Stand",
+        "price": 29900,
+        "price_min": 29900,
+        "historical_sold": 1500,
+        "item_rating": {
+          "rating_star": 4.8
+        },
+        "shopid": 87654321
+      }
+    },
+    {
+      "item_basic": {
+        "itemid": 23456789,
+        "name": "Yoga Mat Premium",
+        "price": 59900,
+        "price_min": 49900,
+        "historical_sold": 800,
+        "item_rating": {
+          "rating_star": 4.5
+        },
+        "shopid": 11111111
+      }
+    },
+    {
+      "item_basic": {
+        "itemid": 34567890,
+        "name": "Phone Case Clear",
+        "price": 9900,
+        "price_min": 5900,
+        "historical_sold": 5000,
+        "item_rating": {
+          "rating_star": 4.2
+        },
+        "shopid": 22222222
+      }
+    }
+  ]
+}

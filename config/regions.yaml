@@ -1,0 +1,26 @@
+regions:
+  th:
+    name: Thailand
+    currency: THB
+    language: th
+    enabled: true
+  id:
+    name: Indonesia
+    currency: IDR
+    language: id
+    enabled: true
+  ph:
+    name: Philippines
+    currency: PHP
+    language: en
+    enabled: false
+  vn:
+    name: Vietnam
+    currency: VND
+    language: vi
+    enabled: false
+  my:
+    name: Malaysia
+    currency: MYR
+    language: ms
+    enabled: false

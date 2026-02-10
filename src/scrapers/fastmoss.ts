@@ -3,34 +3,175 @@ import { chromium } from "playwright";
 import { FastmossProductSchema } from "@/schemas/product";
 import type { FastmossProduct } from "@/schemas/product";
 import { logger } from "@/utils/logger";
-import { withRetry } from "@/utils/retry";
+import { parseChineseNumber } from "@/utils/parse-chinese-number";
 
 const FASTMOSS_BASE_URL = "https://www.fastmoss.com/e-commerce/saleslist";
-const BROWSER_DATA_DIR = "db/browser-data";
-const MIN_DELAY_MS = 1000;
+const CDP_URL = "http://127.0.0.1:9222";
 
 export type FastmossScrapeOptions = {
   region: string;
   category?: string;
   limit?: number;
+  cdpUrl?: string;
 };
 
 /**
- * Scrape FastMoss ranking page using Playwright with persistent context.
- * - Uses saved session from db/browser-data/
- * - Detects expired session (redirect to login page)
- * - Applies region + category filters via URL
- * - Respects rate limiting (1s+ delay between navigations)
+ * Raw row data extracted from the FastMoss DOM via page.evaluate().
+ * Matches the actual Ant Design table structure.
+ */
+type RawRowData = {
+  productName: string;
+  shopName: string;
+  category: string;
+  commissionRate: string;
+  unitsSold: string;
+  growthRate: string;
+  gmv: string;
+};
+
+/**
+ * Extract product data from the FastMoss ranking table using DOM API.
+ * Runs inside the browser via page.evaluate() — not in Node.
+ * ESLint disabled because DOM types are unresolved in the Node TS context.
+ */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+function extractTableDataScript(): RawRowData[] {
+  const rows = document.querySelectorAll(
+    "tr.ant-table-row.ant-table-row-level-0",
+  );
+  const results: RawRowData[] = [];
+
+  for (const row of rows) {
+    const cells = row.querySelectorAll("td.ant-table-cell");
+    if (cells.length < 11) {
+      continue;
+    }
+
+    // Cell 1: product name (text before "售价：")
+    const cell1Text = cells[1]?.textContent?.trim() ?? "";
+    const productName = cell1Text.split("售价")[0]?.trim() ?? "";
+
+    // Cell 3: shop name (text before "店铺销量")
+    const cell3Text = cells[3]?.textContent?.trim() ?? "";
+    const shopName = cell3Text.split("店铺销量")[0]?.trim() ?? "";
+
+    // Cell 4: category
+    const category = cells[4]?.textContent?.trim() ?? "";
+
+    // Cell 5: commission rate (e.g., "1%")
+    const commissionRate = cells[5]?.textContent?.trim() ?? "0%";
+
+    // Cell 6: sales volume (e.g., "2.28万")
+    const unitsSold = cells[6]?.textContent?.trim() ?? "0";
+
+    // Cell 7: growth rate (e.g., "1249.68%" or "-2.51%")
+    const growthRate = cells[7]?.textContent?.trim() ?? "0%";
+
+    // Cell 8: GMV / revenue (e.g., "RM15.00万")
+    const gmv = cells[8]?.textContent?.trim() ?? "0";
+
+    if (productName) {
+      results.push({
+        productName,
+        shopName,
+        category,
+        commissionRate,
+        unitsSold,
+        growthRate,
+        gmv,
+      });
+    }
+  }
+
+  return results;
+}
+/* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+
+/**
+ * Parse a percentage string like "25.5%" or "-5.2%" or "1249.68%" into a decimal.
+ * Returns 0 if unparseable.
+ */
+function parsePercentage(raw: string): number {
+  const cleaned = raw.replace("%", "").replace(/,/g, "").trim();
+  const value = Number.parseFloat(cleaned);
+  if (Number.isNaN(value)) {
+    return 0;
+  }
+  return value / 100;
+}
+
+/**
+ * Transform raw DOM data into validated FastmossProduct objects.
+ * Pure function — fully testable without Playwright.
+ */
+export function transformRawRows(
+  rows: RawRowData[],
+  country: string,
+  scrapedAt: string,
+): FastmossProduct[] {
+  const products: FastmossProduct[] = [];
+
+  for (const row of rows) {
+    const raw = {
+      productName: row.productName,
+      shopName: row.shopName,
+      country,
+      category: row.category === "" ? null : row.category,
+      unitsSold: parseChineseNumber(row.unitsSold),
+      gmv: parseChineseNumber(row.gmv),
+      orderGrowthRate: parsePercentage(row.growthRate),
+      commissionRate: parsePercentage(row.commissionRate),
+      scrapedAt,
+    };
+
+    const result = FastmossProductSchema.safeParse(raw);
+    if (result.success) {
+      products.push(result.data);
+    } else {
+      logger.warn(
+        `[fastmoss] Skipping invalid product "${row.productName}"`,
+        result.error.issues,
+      );
+    }
+  }
+
+  return products;
+}
+
+/**
+ * Scrape FastMoss ranking page by connecting to a running Chrome via CDP.
+ *
+ * Prerequisites:
+ * 1. Chrome must be running with: --remote-debugging-port=9222
+ * 2. User must be logged into FastMoss in that Chrome
+ *
+ * Use `bun run scripts/chrome.ts` to launch Chrome with the correct flags.
  */
 export async function scrapeFastmoss(
   options: FastmossScrapeOptions,
 ): Promise<FastmossProduct[]> {
-  const context = await chromium.launchPersistentContext(BROWSER_DATA_DIR, {
-    headless: true,
-  });
+  const cdpUrl = options.cdpUrl ?? CDP_URL;
+
+  let browser;
+  try {
+    browser = await chromium.connectOverCDP(cdpUrl);
+  } catch (error) {
+    logger.error(
+      "Failed to connect to Chrome via CDP. Is Chrome running with --remote-debugging-port=9222?",
+      error,
+    );
+    throw new Error(
+      "Cannot connect to Chrome. Please run: bun run scripts/chrome.ts",
+    );
+  }
 
   try {
-    const page = context.pages()[0] ?? (await context.newPage());
+    const context = browser.contexts()[0];
+    if (!context) {
+      throw new Error("No browser context found in Chrome");
+    }
+
+    const page = await context.newPage();
 
     // Build URL with region filter
     const url = new URL(FASTMOSS_BASE_URL);
@@ -39,24 +180,34 @@ export async function scrapeFastmoss(
       url.searchParams.set("category", options.category);
     }
 
-    await withRetry(async () => {
-      await page.goto(url.toString(), { waitUntil: "networkidle" });
+    await page.goto(url.toString(), {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
     });
 
     // Check for login redirect (expired session)
     const currentUrl = page.url();
-    if (currentUrl.includes("/login")) {
-      logger.error("FastMoss session expired — please login manually");
+    if (currentUrl.includes("/login") || currentUrl.includes("/sign")) {
+      await page.close();
+      logger.error("FastMoss session expired — please login in Chrome");
       throw new Error(
-        "FastMoss session expired. Please login manually via: npx playwright open db/browser-data/",
+        "FastMoss session expired. Please login at https://www.fastmoss.com in your Chrome browser.",
       );
     }
 
-    await page.waitForTimeout(MIN_DELAY_MS);
+    // Wait for the Ant Design table to render
+    await page.waitForSelector("tr.ant-table-row", { timeout: 30000 });
 
-    const html = await page.content();
+    // Small extra wait for all data to populate
+    await page.waitForTimeout(2000);
+
+    // Extract data from DOM
+    const rawRows = await page.evaluate(extractTableDataScript);
+
+    await page.close();
+
     const today = new Date().toISOString().slice(0, 10);
-    let products = parseFastmossRanking(html, options.region, today);
+    let products = transformRawRows(rawRows, options.region, today);
 
     // Apply limit if specified
     if (options.limit && products.length > options.limit) {
@@ -70,83 +221,7 @@ export async function scrapeFastmoss(
 
     return products;
   } finally {
-    await context.close();
+    // Disconnect from CDP — does NOT close Chrome
+    await browser.close();
   }
-}
-
-/**
- * Extract text content from an HTML element matched by class name within a row.
- * Returns the trimmed text content between the opening and closing tags.
- */
-function extractCellText(rowHtml: string, className: string): string {
-  const pattern = new RegExp(
-    `<td\\s[^>]*class="${className}"[^>]*>([^<]*)</td>`,
-  );
-  const match = pattern.exec(rowHtml);
-  return match?.[1]?.trim() ?? "";
-}
-
-/**
- * Parse a percentage string like "25.5%" or "-5.2%" into a decimal number.
- * Returns 0 if the string cannot be parsed.
- */
-function parsePercentage(raw: string): number {
-  const cleaned = raw.replace("%", "").trim();
-  const value = Number.parseFloat(cleaned);
-  if (Number.isNaN(value)) {
-    return 0;
-  }
-  return value / 100;
-}
-
-/**
- * Parse FastMoss ranking page HTML into validated products.
- * Pure function — no Playwright dependency, fully testable.
- */
-export function parseFastmossRanking(
-  html: string,
-  country: string,
-  scrapedAt: string,
-): FastmossProduct[] {
-  const products: FastmossProduct[] = [];
-
-  // Match all product rows
-  const rowPattern = /<tr\s[^>]*class="product-row"[^>]*>[\s\S]*?<\/tr>/g;
-  let rowMatch: RegExpExecArray | null;
-
-  while ((rowMatch = rowPattern.exec(html)) !== null) {
-    const rowHtml = rowMatch[0];
-
-    const productName = extractCellText(rowHtml, "product-name");
-    const shopName = extractCellText(rowHtml, "shop-name");
-    const categoryRaw = extractCellText(rowHtml, "category");
-    const unitsSoldRaw = extractCellText(rowHtml, "units-sold");
-    const gmvRaw = extractCellText(rowHtml, "gmv");
-    const growthRateRaw = extractCellText(rowHtml, "growth-rate");
-    const commissionRateRaw = extractCellText(rowHtml, "commission-rate");
-
-    const raw = {
-      productName,
-      shopName,
-      country,
-      category: categoryRaw === "" ? null : categoryRaw,
-      unitsSold: Number.parseInt(unitsSoldRaw, 10),
-      gmv: Number.parseFloat(gmvRaw),
-      orderGrowthRate: parsePercentage(growthRateRaw),
-      commissionRate: parsePercentage(commissionRateRaw),
-      scrapedAt,
-    };
-
-    const result = FastmossProductSchema.safeParse(raw);
-    if (result.success) {
-      products.push(result.data);
-    } else {
-      logger.warn(
-        `[fastmoss] Skipping invalid product "${productName}"`,
-        result.error.issues,
-      );
-    }
-  }
-
-  return products;
 }

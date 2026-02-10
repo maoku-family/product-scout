@@ -1,5 +1,7 @@
 # FastMoss Scraper CDP Rewrite Plan
 
+> **Status: Archived** — This is a historical plan document. The implementation may differ from what's described here (e.g., CDP was replaced by Playwright persistent context). For the current state, refer to [design.md](../design.md) and [architecture.md](../architecture.md).
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Rewrite FastMoss scraper to use CDP bridge (connect to user's system Chrome) and DOM-based data extraction instead of regex HTML parsing.

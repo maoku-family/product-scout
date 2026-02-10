@@ -4,6 +4,7 @@ import { FastmossProductSchema } from "@/schemas/product";
 import type { FastmossProduct } from "@/schemas/product";
 import { logger } from "@/utils/logger";
 import { parseChineseNumber } from "@/utils/parse-chinese-number";
+import { withRetry } from "@/utils/retry";
 
 const FASTMOSS_BASE_URL = "https://www.fastmoss.com/e-commerce/saleslist";
 const CDP_URL = "http://127.0.0.1:9222";
@@ -154,7 +155,10 @@ export async function scrapeFastmoss(
 
   let browser;
   try {
-    browser = await chromium.connectOverCDP(cdpUrl);
+    browser = await withRetry(() => chromium.connectOverCDP(cdpUrl), {
+      maxRetries: 3,
+      delay: 2000,
+    });
   } catch (error) {
     logger.error(
       "Failed to connect to Chrome via CDP. Is Chrome running with --remote-debugging-port=9222?",
@@ -180,10 +184,14 @@ export async function scrapeFastmoss(
       url.searchParams.set("category", options.category);
     }
 
-    await page.goto(url.toString(), {
-      waitUntil: "domcontentloaded",
-      timeout: 60000,
-    });
+    await withRetry(
+      () =>
+        page.goto(url.toString(), {
+          waitUntil: "domcontentloaded",
+          timeout: 60000,
+        }),
+      { maxRetries: 3, delay: 2000 },
+    );
 
     // Check for login redirect (expired session)
     const currentUrl = page.url();

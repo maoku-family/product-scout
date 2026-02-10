@@ -27,12 +27,13 @@
 product-scout/
 ├── scripts/              # Executable scripts
 │   ├── scout.ts          # Main flow: scrape → filter → sync
+│   ├── chrome.ts         # Launch Chrome with CDP debugging port
 │   ├── status.ts         # Check run status
 │   └── top.ts            # View top N candidates
 │
 ├── src/                  # Source code
 │   ├── scrapers/         # Data collection layer
-│   │   ├── fastmoss.ts   # FastMoss ranking scraper (Playwright + regex HTML parser)
+│   │   ├── fastmoss.ts   # FastMoss ranking scraper (CDP bridge + DOM extraction via page.evaluate)
 │   │   └── shopee.ts     # Shopee search (direct API fetch + JSON parser)
 │   │
 │   ├── api/              # External API layer
@@ -64,6 +65,7 @@ product-scout/
 │   │
 │   └── utils/            # Utility functions
 │       ├── logger.ts     # Structured logger
+│       ├── parse-chinese-number.ts  # Chinese number format parser (万/亿)
 │       └── retry.ts      # withRetry wrapper with exponential backoff
 │
 ├── config/
@@ -125,7 +127,7 @@ product-scout/
 
 | Module | Method | Description |
 |--------|--------|-------------|
-| `fastmoss.ts` | Playwright + regex HTML parsing | Scrapes FastMoss ranking page using persistent browser context. Uses regex to extract table rows (no DOM available in Bun). Detects expired session by checking for login redirect. Validates each product with Zod before returning. |
+| `fastmoss.ts` | CDP bridge (`connectOverCDP`) + `page.evaluate()` DOM extraction | Connects to user's running Chrome via CDP (port 9222). Uses `page.evaluate()` to extract data from Ant Design table DOM (`tr.ant-table-row`). Includes `transformRawRows()` pure function for testable data transformation. Parses Chinese number format (万/亿) via `parseChineseNumber` utility. Requires `bun run scripts/chrome.ts` to launch Chrome with CDP port. |
 | `shopee.ts` | Direct API fetch + Zod JSON parsing | Calls Shopee's public search API (`/api/v4/search/search_items`) directly via `fetch`. No Playwright needed — more reliable and faster. Parses Shopee's snake_case response into camelCase domain objects. Prices divided by 100 (Shopee uses cents). |
 
 ### APIs
@@ -301,7 +303,9 @@ Synced from `candidates` joined with `products`:
 
 | Decision | Rationale |
 |----------|-----------|
-| FastMoss uses regex HTML parsing | Bun has no built-in DOM. Regex on `<tr class="product-row">` rows is sufficient for table data. Pure function `parseFastmossRanking()` is fully testable. |
+| FastMoss uses CDP bridge to system Chrome | FastMoss WAF (Tencent EdgeOne) blocks Playwright's bundled Chromium in headless mode. CDP bridge connects to user's real Chrome browser via `chromium.connectOverCDP()`, making scraping completely undetectable. Requires user to launch Chrome with `--remote-debugging-port=9222`. |
+| FastMoss uses DOM extraction via `page.evaluate()` | Page uses React + Ant Design components (`tr.ant-table-row.ant-table-row-level-0`). DOM API via `page.evaluate()` is more reliable than regex on dynamically-rendered HTML. Pure function `transformRawRows()` handles data transformation and is fully testable. |
+| Chinese number parser for FastMoss data | FastMoss displays sales data in Chinese format ("2.28万" = 22,800, "7.63亿" = 763,000,000). Dedicated `parseChineseNumber()` utility handles 万/亿 suffixes, currency prefixes, and comma separators. |
 | Shopee uses direct API fetch (not Playwright) | Shopee has a public search API endpoint. Direct fetch is faster, more reliable, and avoids browser overhead. |
 | Google Trends falls back to "stable" on error | Trends is a supplementary signal (10% weight). Failing silently avoids blocking the entire pipeline for a non-critical data source. |
 | CJ uses $3 USD default shipping estimate | Actual shipping varies by product and destination. $3 is a reasonable SEA average for lightweight dropship items. Can be refined per-region later. |
@@ -313,7 +317,7 @@ Synced from `candidates` joined with `products`:
 | Node.js `parseArgs` for CLI | No external CLI library needed. Bun supports Node.js `parseArgs` natively. Keeps dependency count low. |
 | Sequential product processing in pipeline | Products are processed one-by-one (not in parallel) to respect rate limits on Shopee, Google Trends, and CJ APIs. Parallelism would risk IP blocks. |
 | Config deep merge with array replacement | Region overrides merge nested objects (price, profitMargin) at field level but replace arrays entirely. This avoids merging `excludedCategories` lists which would make it impossible to remove a default exclusion at region level. |
-| FastMoss persistent browser context | Stores login session in `db/browser-data/`. Avoids re-login on every run. Session expiry is detected by checking for login page redirect. Manual re-login required when expired. |
+| FastMoss uses CDP connection to user's Chrome | User launches Chrome with `--remote-debugging-port=9222` (via `bun run scripts/chrome.ts`). Playwright connects via CDP. Session managed by user's real Chrome — no separate session storage needed. Session expiry detected by login page redirect. |
 | Shopee prices divided by 100 | Shopee API returns prices in the smallest currency unit (cents). All internal representations use standard currency units (dollars/baht). |
 
 ---

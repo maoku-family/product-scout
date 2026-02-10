@@ -59,7 +59,7 @@ FastMoss SEA → Shopee Validation → Google Trends → CJ Cost → Rule Filter
 
 | Platform | Collection Method | Data Content | Purpose | Frequency |
 |----------|-------------------|--------------|---------|-----------|
-| **TikTok SEA** | FastMoss (Playwright persistent context) | Top-selling products, GMV, growth rate, commission | Discover trending products | Daily |
+| **TikTok SEA** | FastMoss (CDP bridge to Chrome + DOM extraction) | Top-selling products, GMV, growth rate, commission | Discover trending products | Daily |
 | **Shopee** | Direct API fetch (`/api/v4/search/search_items`) | Search results, price, sales, rating | Validate market demand | Daily |
 | **Google Trends SEA** | google-trends-api (90-day window) | Keyword search trends | Supplementary trend signal (10% weight) | On-demand |
 | **CJ Dropshipping** | Official REST API (POST search) | Product cost, shipping ($3 default), inventory | Cost calculation | On-demand |
@@ -68,7 +68,9 @@ FastMoss SEA → Shopee Validation → Google Trends → CJ Cost → Rule Filter
 
 | Original Plan | Actual Implementation | Reason |
 |---------------|----------------------|--------|
-| Apify for TikTok data | FastMoss Playwright scraper | Apify lacked SEA coverage; FastMoss provides direct ranking data with GMV, growth rate, commission |
+| Apify for TikTok data | FastMoss CDP bridge to Chrome | Apify lacked SEA coverage; FastMoss provides direct ranking data with GMV, growth rate, commission |
+| Playwright persistent context | CDP bridge to system Chrome | Persistent context used Playwright's Chromium which is blocked by FastMoss WAF (Tencent EdgeOne). CDP connects to user's real Chrome browser for undetectable scraping |
+| Regex HTML parsing | DOM extraction via `page.evaluate()` | FastMoss uses React + Ant Design (dynamic rendering). DOM API is more reliable than regex on SPA HTML |
 | Shopee Playwright scraper | Shopee direct API fetch | Shopee has a public search API; direct fetch is faster, more reliable, avoids browser overhead |
 | Real-time shipping costs | $3 USD default estimate | Actual CJ shipping varies by product/destination; $3 is a reasonable SEA average for lightweight items |
 
@@ -118,6 +120,7 @@ Post-filter gracefully skips checks when enrichment data is missing (e.g., no Sh
 
 | Command | Function |
 |---------|----------|
+| `bun run scripts/chrome.ts` | Launch Chrome with CDP port (required before scout) |
 | `bun run scripts/scout.ts --region th` | Run product selection flow |
 | `bun run scripts/scout.ts --region th --limit 5 --dry-run` | Dry run (no Notion sync) |
 | `bun run scripts/status.ts` | Check database status |
@@ -180,7 +183,8 @@ Post-filter gracefully skips checks when enrichment data is missing (e.g., no Sh
 | Risk | Level | Mitigation | Status |
 |------|-------|------------|--------|
 | Shopee anti-scraping | Medium | Direct API (not browser), rate limiting, graceful `[]` degradation | Mitigated |
-| FastMoss session expiry | Medium | Persistent browser context, login redirect detection, manual re-login docs | Mitigated |
+| FastMoss WAF blocking | High | CDP bridge to user's system Chrome (undetectable), non-headless mode | Mitigated |
+| FastMoss session expiry | Medium | CDP uses Chrome's real session, login redirect detection, manual re-login in Chrome | Mitigated |
 | Google Trends rate limiting | Low | Falls back to "stable" (50 pts), only 10% weight | Mitigated |
 | Notion API rate limiting | Low | Sequential page creation, continues on individual failure | Mitigated |
 | Inaccurate filtering rules | Expected | Per-region config overrides, iterate through practice | Ongoing |

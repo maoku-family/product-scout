@@ -1,0 +1,11 @@
+regions:
+  th:
+    name: Thailand
+    currency: THB
+    language: th
+    enabled: true
+  id:
+    name: Indonesia
+    currency: IDR
+    language: id
+    enabled: true

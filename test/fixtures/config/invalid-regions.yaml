@@ -1,0 +1,4 @@
+regions:
+  th:
+    name: Thailand
+    # missing currency and language

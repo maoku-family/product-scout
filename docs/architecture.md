@@ -27,13 +27,12 @@
 product-scout/
 ├── scripts/              # Executable scripts
 │   ├── scout.ts          # Main flow: scrape → filter → sync
-│   ├── chrome.ts         # Launch Chrome with CDP debugging port (debug utility, not required for normal operation)
 │   ├── status.ts         # Check run status
 │   └── top.ts            # View top N candidates
 │
 ├── src/                  # Source code
 │   ├── scrapers/         # Data collection layer
-│   │   ├── fastmoss.ts   # FastMoss ranking scraper (CDP bridge + DOM extraction via page.evaluate)
+│   │   ├── fastmoss.ts   # FastMoss ranking scraper (persistent context + system Chrome + DOM extraction)
 │   │   └── shopee.ts     # Shopee search (direct API fetch + JSON parser)
 │   │
 │   ├── api/              # External API layer

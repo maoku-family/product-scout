@@ -189,6 +189,21 @@ Post-filter gracefully skips checks when enrichment data is missing (e.g., no Sh
 | Notion API rate limiting | Low | Sequential page creation, continues on individual failure | Mitigated |
 | Inaccurate filtering rules | Expected | Per-region config overrides, iterate through practice | Ongoing |
 
+### Known Issues
+
+| # | Category | Issue | Impact | Possible Improvement |
+|---|----------|-------|--------|---------------------|
+| 1 | Data Matching | CJ product matching is inaccurate — uses raw product name (possibly Thai/Vietnamese) to search CJ (English), takes first result without similarity check | Profit margin calculation may be unreliable | Translate product name to English before CJ search; add similarity scoring to filter irrelevant results |
+| 2 | Data Matching | Shopee matching has the same problem — keyword search takes first result without verifying it's the same product | Shopee price/sales validation may reference wrong product | Add title similarity check; use multiple results and pick best match |
+| 3 | Data Matching | Google Trends keyword mismatch — non-English product names may return no data, falls back to "stable" (50 pts) | Trend signal is unreliable for non-English products; 10% weight limits impact | Extract English keywords or translate before querying |
+| 4 | Runtime | FastMoss requires manual login — first run and session expiry require manually logging in via the Chrome window | Cannot fully automate; blocks unattended scheduled runs | Investigate cookie injection or headless login flow |
+| 5 | Runtime | Non-headless mode required — FastMoss WAF blocks headless Chrome, must use `headless: false` | Cannot run on headless servers (CI/CD, cloud VMs) | Investigate stealth plugins or alternative data sources |
+| 6 | Data Quality | Shipping cost is a fixed $3 estimate — actual cost varies by country, weight, and logistics channel | Profit margin calculation is approximate | Query CJ shipping API with specific SKU + destination when available |
+| 7 | Data Quality | Shopee API returns 403 intermittently — graceful degradation returns `[]`, but loses price validation data | Products may pass filtering without Shopee validation | Add retry with backoff; rotate User-Agent; consider Shopee affiliate API |
+| 8 | Functionality | Notion duplicate sync — each pipeline run creates new pages, no dedup or update mechanism | Duplicate entries accumulate in Notion database | Check existing pages by product name before creating; update if exists |
+| 9 | Functionality | No scheduled execution — Phase 4 not yet implemented, CLI-only | Requires manual trigger daily | Implement cron-based scheduling |
+| 10 | Functionality | No multi-region parallel runs — regions must be run sequentially | Slower for multi-country scouting | Support concurrent region pipelines |
+
 ### Cost Estimate
 
 | Item | Cost | Notes |

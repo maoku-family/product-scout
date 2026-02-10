@@ -8,7 +8,7 @@
 
 ## 1. System Architecture
 
-### Overall Architecture (MVP)
+### Architecture (MVP)
 
 ```mermaid
 flowchart TB
@@ -16,41 +16,32 @@ flowchart TB
         A[OpenClaw<br/>Scheduled 9:00 / Manual /scout]
     end
 
-    subgraph Data Collection
-        A --> B1[FastMoss SEA<br/>Playwright]
-        A --> B2[Shopee<br/>Direct API]
-        A --> B3[Google Trends SEA]
-        A --> B4[CJ API]
-    end
+    subgraph Pipeline
+        A -->|"①"| B1[FastMoss SEA<br/>Playwright]
+        B1 -->|"②"| C1[(Store Products<br/>SQLite)]
+        C1 -->|"③"| D1[Pre-filter<br/>Units / Growth / Category]
 
-    subgraph Storage
-        B1 --> C[(SQLite)]
-        B2 --> C
-        B3 --> C
-        B4 --> C
-    end
+        subgraph Enrichment["④⑤⑥ Enrichment (per product)"]
+            E1[Shopee<br/>Direct API]
+            E2[Google Trends SEA]
+            E3[CJ API]
+            E1 --> E2 --> E3
+        end
 
-    subgraph Filtering
-        C --> D[Rule Engine<br/>Basic Filter + Scoring]
+        D1 --> E1
+        E3 -->|"⑦"| D2[Post-filter<br/>Price / Profit Margin]
+        D2 -->|"⑧"| S[Scoring<br/>5-dimension Weighted]
+        S -->|"⑨"| C2[(Store Candidates<br/>SQLite)]
     end
 
     subgraph Output
-        D --> F1[Notion<br/>Candidate Products]
+        C2 -->|"⑩"| F1[Notion<br/>Candidate Products]
     end
 
     subgraph Feedback
         F1 --> G[Manual Judgment]
-        G -.-> D
+        G -.->|Adjust rules.yaml| D1
     end
-```
-
-### Data Flow
-
-```
-FastMoss SEA → Shopee Validation → Google Trends → CJ Cost → Rule Filtering → Notion
-     ↓              ↓                  ↓            ↓            ↓
-  Discover      Validate           Supplement    Calculate    Output
-   Trends        Demand             Signal        Profit     Candidates
 ```
 
 ---
@@ -131,9 +122,8 @@ Post-filter gracefully skips checks when enrichment data is missing (e.g., no Sh
 ## 5. Development Plan
 
 - **Phase 1: Project Initialization** ✅ — Git repo, Bun project, ESLint/Prettier, pre-commit hooks
-- **Phase 2: Data Collection** ✅ — SQLite, FastMoss scraper, Shopee API, Google Trends, CJ API
-- **Phase 3: Filtering and Output** ✅ — Two-stage filter, 5-dimension scorer, Notion sync
-- **Phase 4: Scheduling & Automation** — TODO:
+- **Phase 2: Data Collection + Filtering + Output** ✅ — SQLite, FastMoss scraper, Shopee API, Google Trends, CJ API, two-stage filter, 5-dimension scorer, Notion sync
+- **Phase 3: Scheduling & Automation** — TODO:
   - [ ] Scheduled daily execution (cron or similar)
   - [ ] Add monitoring and alerting
   - [ ] Support multi-region parallel runs
@@ -156,16 +146,6 @@ Post-filter gracefully skips checks when enrichment data is missing (e.g., no Sh
 | 8 | Functionality | Notion duplicate sync — each pipeline run creates new pages, no dedup or update mechanism | Duplicate entries accumulate in Notion | Open |
 | 9 | Functionality | No scheduled execution — Phase 4 not yet implemented, CLI-only | Requires manual trigger daily | Open |
 | 10 | Functionality | No multi-region parallel runs — regions must be run sequentially | Slower for multi-country scouting | Open |
-
-### Cost Estimate
-
-| Item | Cost | Notes |
-|------|------|-------|
-| FastMoss | Free tier | Web scraping with persistent login |
-| CJ API | Free | Official REST API |
-| Google Trends | Free | google-trends-api package |
-| Notion | Free | API within workspace limits |
-| **Total** | **$0/month** | All services used within free tiers |
 
 ### MVP Success Criteria
 

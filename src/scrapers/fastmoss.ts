@@ -1,6 +1,78 @@
+import { chromium } from "playwright";
+
 import { FastmossProductSchema } from "@/schemas/product";
 import type { FastmossProduct } from "@/schemas/product";
 import { logger } from "@/utils/logger";
+import { withRetry } from "@/utils/retry";
+
+const FASTMOSS_BASE_URL = "https://www.fastmoss.com/e-commerce/saleslist";
+const BROWSER_DATA_DIR = "db/browser-data";
+const MIN_DELAY_MS = 1000;
+
+export type FastmossScrapeOptions = {
+  region: string;
+  category?: string;
+  limit?: number;
+};
+
+/**
+ * Scrape FastMoss ranking page using Playwright with persistent context.
+ * - Uses saved session from db/browser-data/
+ * - Detects expired session (redirect to login page)
+ * - Applies region + category filters via URL
+ * - Respects rate limiting (1s+ delay between navigations)
+ */
+export async function scrapeFastmoss(
+  options: FastmossScrapeOptions,
+): Promise<FastmossProduct[]> {
+  const context = await chromium.launchPersistentContext(BROWSER_DATA_DIR, {
+    headless: true,
+  });
+
+  try {
+    const page = context.pages()[0] ?? (await context.newPage());
+
+    // Build URL with region filter
+    const url = new URL(FASTMOSS_BASE_URL);
+    url.searchParams.set("country", options.region);
+    if (options.category) {
+      url.searchParams.set("category", options.category);
+    }
+
+    await withRetry(async () => {
+      await page.goto(url.toString(), { waitUntil: "networkidle" });
+    });
+
+    // Check for login redirect (expired session)
+    const currentUrl = page.url();
+    if (currentUrl.includes("/login")) {
+      logger.error("FastMoss session expired — please login manually");
+      throw new Error(
+        "FastMoss session expired. Please login manually via: npx playwright open db/browser-data/",
+      );
+    }
+
+    await page.waitForTimeout(MIN_DELAY_MS);
+
+    const html = await page.content();
+    const today = new Date().toISOString().slice(0, 10);
+    let products = parseFastmossRanking(html, options.region, today);
+
+    // Apply limit if specified
+    if (options.limit && products.length > options.limit) {
+      products = products.slice(0, options.limit);
+    }
+
+    logger.info(`FastMoss scraped ${String(products.length)} products`, {
+      region: options.region,
+      category: options.category,
+    });
+
+    return products;
+  } finally {
+    await context.close();
+  }
+}
 
 /**
  * Extract text content from an HTML element matched by class name within a row.

@@ -9,11 +9,15 @@
 | Layer | Technology | Purpose |
 |-------|------------|---------|
 | Runtime | Bun | TypeScript execution, package management |
-| Language | TypeScript 5.x | Strict mode |
-| Validation | Zod | Runtime validation + type inference |
-| Database | bun:sqlite | Bun native SQLite, zero deps, 3-6x faster |
+| Language | TypeScript 5.x | Strict mode, `noUncheckedIndexedAccess` |
+| Validation | Zod 4 | Runtime validation + type inference |
+| Database | bun:sqlite | Bun native SQLite, zero deps, WAL mode |
 | Web Scraping | Playwright | FastMoss scraping (persistent browser context) |
-| Testing | Vitest | Unit tests |
+| HTTP Client | Native `fetch` | Shopee API, CJ API (no extra deps) |
+| Config | yaml + Zod | YAML config files with schema validation |
+| Testing | Vitest + better-sqlite3 | Unit tests (see Testing section for shim details) |
+| CLI | Node.js `parseArgs` | CLI argument parsing (no external CLI library) |
+| Git Hooks | simple-git-hooks + lint-staged | Pre-commit: ESLint fix; Pre-push: block direct push to main |
 
 ---
 
@@ -98,10 +102,20 @@ product-scout/
 - Prevents dirty data from entering database
 
 **Error Handling:**
-- All network requests wrapped with `withRetry`
-- Exponential backoff on failure
+- All network requests wrapped with `withRetry` (3 retries, 1s base delay, linear backoff: 1s, 2s, 3s)
 - Clear error logging before throwing
-- Graceful degradation where appropriate (Shopee returns `[]`, Trends returns `"stable"`)
+- Graceful degradation by priority:
+  - Shopee: returns `[]` on block/error (pipeline continues without price validation)
+  - Google Trends: returns `"stable"` on any error (10% weight, non-critical)
+  - CJ: returns `null` on no match (skip cost data, affects profit margin only)
+  - FastMoss: throws on session expired (requires manual re-login, cannot degrade)
+  - Notion sync: continues on individual page creation failure (logs error, processes remaining)
+
+**Pipeline Design:**
+- Products are processed **sequentially** (not in parallel) to respect rate limits on external APIs
+- Pre-filter runs **before** any external API calls to minimize unnecessary requests
+- Post-filter runs **after** enrichment to filter on data that requires external lookups (price, margin)
+- Pipeline is **idempotent**: `INSERT OR IGNORE` on products table prevents duplicate entries across runs
 
 ---
 
@@ -142,11 +156,62 @@ product-scout/
 | Module | Description |
 |--------|-------------|
 | `loader.ts` | Generic `loadConfig<T>(filePath, zodSchema)` function. Reads YAML, parses, validates with Zod. Used for regions, categories, rules, secrets. |
-| `config.ts` (schemas) | Defines all config schemas. Includes `getFiltersForRegion()` which deep-merges default rules with per-region overrides. |
+| `config.ts` (schemas) | Defines all config schemas. Includes `getFiltersForRegion()` which deep-merges default rules with per-region overrides. Merge strategy: nested objects (price, profitMargin) are shallow-merged preserving unspecified fields; scalars are directly overridden; arrays (excludedCategories) are fully replaced. |
 
 ---
 
-## 5. Data Schema
+## 5. Testing Architecture
+
+### bun:sqlite Test Shim
+
+Vitest runs outside of Bun runtime, so `bun:sqlite` is not available. The project uses an **alias shim** to make tests work:
+
+```
+# vitest.config.ts
+resolve.alias: { "bun:sqlite": "./test/shims/bun-sqlite.ts" }
+```
+
+The shim wraps `better-sqlite3` (dev dependency) to match `bun:sqlite`'s API surface. This means:
+- **Production** uses `bun:sqlite` (native, zero deps)
+- **Tests** use `better-sqlite3` (compatible shim via Vitest alias)
+- All DB code uses `db.prepare(sql).run(...params)` pattern (works in both)
+- Avoid `db.run(sql)` — not available in better-sqlite3
+
+### Test Structure
+
+```
+test/
+├── unit/                    # Pure function tests (no external deps)
+│   ├── schemas/             # Zod schema validation tests
+│   ├── core/                # Filter, scorer, sync, pipeline tests
+│   ├── scrapers/            # HTML/JSON parser tests
+│   ├── api/                 # API client tests (mocked fetch)
+│   ├── db/                  # Query tests (in-memory SQLite)
+│   └── config/              # Config loader tests
+├── integration/             # Tests with real file I/O
+│   └── config/              # YAML loading with real files
+├── fixtures/                # Test data files
+│   ├── fastmoss/            # HTML fixtures
+│   ├── shopee/              # JSON fixtures
+│   └── config/              # YAML fixtures
+└── shims/
+    └── bun-sqlite.ts        # better-sqlite3 → bun:sqlite shim
+```
+
+### Test Coverage: 163 tests across 17 files
+
+| Module | Test Count | Key Patterns |
+|--------|-----------|--------------|
+| Schemas (5 files) | 50 | Valid/invalid inputs, boundary values, defaults |
+| Core (4 files) | ~45 | Pure function testing, mock DB for pipeline |
+| Scrapers (2 files) | ~20 | HTML/JSON fixture parsing, edge cases |
+| APIs (2 files) | ~15 | Mocked `globalThis.fetch`, error handling |
+| DB (1 file) | ~15 | In-memory SQLite, CRUD operations |
+| Config (2 files) | ~18 | Valid/invalid YAML, deep merge logic |
+
+---
+
+## 6. Data Schema
 
 ### SQLite Tables
 
@@ -232,7 +297,7 @@ Synced from `candidates` joined with `products`:
 
 ---
 
-## 6. Key Technical Decisions
+## 7. Key Technical Decisions
 
 | Decision | Rationale |
 |----------|-----------|
@@ -240,14 +305,61 @@ Synced from `candidates` joined with `products`:
 | Shopee uses direct API fetch (not Playwright) | Shopee has a public search API endpoint. Direct fetch is faster, more reliable, and avoids browser overhead. |
 | Google Trends falls back to "stable" on error | Trends is a supplementary signal (10% weight). Failing silently avoids blocking the entire pipeline for a non-critical data source. |
 | CJ uses $3 USD default shipping estimate | Actual shipping varies by product and destination. $3 is a reasonable SEA average for lightweight dropship items. Can be refined per-region later. |
-| Scorer uses log scale for Shopee sold count | Linear scale would make low-sales products score near zero. Log10 normalization (against 1000 threshold) provides a fairer distribution: 10 sales ≈ 33, 100 sales ≈ 67, 1000+ = 100. |
+| Scorer uses log scale for Shopee sold count | Linear scale would make low-sales products score near zero. Log10 normalization (against 1000 threshold) provides a fairer distribution: 10 sales ~ 33, 100 sales ~ 67, 1000+ = 100. |
 | Pipeline queries DB for product IDs after insert | Products are batch-inserted, then looked up by composite unique key (name + shop + country + date) to get auto-generated IDs for foreign key linking in shopee_products, cost_data, and candidates. |
 | WAL mode for SQLite | Better concurrent read performance. Appropriate for a pipeline that writes once and reads from Notion sync. |
 | `INSERT OR IGNORE` for products | Same product may appear across runs. Silently skipping duplicates keeps the pipeline idempotent. |
+| Vitest + better-sqlite3 shim for testing | Vitest runs outside Bun runtime, so `bun:sqlite` is unavailable. Alias shim wraps better-sqlite3 to match the API surface. All DB code must use `db.prepare().run()` pattern (not `db.run()`). |
+| Node.js `parseArgs` for CLI | No external CLI library needed. Bun supports Node.js `parseArgs` natively. Keeps dependency count low. |
+| Sequential product processing in pipeline | Products are processed one-by-one (not in parallel) to respect rate limits on Shopee, Google Trends, and CJ APIs. Parallelism would risk IP blocks. |
+| Config deep merge with array replacement | Region overrides merge nested objects (price, profitMargin) at field level but replace arrays entirely. This avoids merging `excludedCategories` lists which would make it impossible to remove a default exclusion at region level. |
+| FastMoss persistent browser context | Stores login session in `db/browser-data/`. Avoids re-login on every run. Session expiry is detected by checking for login page redirect. Manual re-login required when expired. |
+| Shopee prices divided by 100 | Shopee API returns prices in the smallest currency unit (cents). All internal representations use standard currency units (dollars/baht). |
 
 ---
 
-## 7. Code Quality Checklist
+## 8. Configuration System
+
+### Config File Structure
+
+```yaml
+# config/rules.yaml — defaults + per-region overrides
+defaults:
+  price: { min: 10, max: 30 }       # USD
+  profitMargin: { min: 0.3 }        # 30%
+  minUnitsSold: 100
+  minGrowthRate: 0
+  excludedCategories: [adult products, weapons, drugs]
+regions:
+  th:
+    price: { min: 5, max: 25 }      # overrides defaults.price
+  id:
+    price: { min: 3, max: 15 }
+    minUnitsSold: 50                  # overrides defaults.minUnitsSold
+```
+
+### Config Loading Flow
+
+```
+scripts/scout.ts
+  → loadConfig("config/rules.yaml", RulesConfigSchema)
+  → getFiltersForRegion(rules, "th")
+  → { price: {min:5, max:25}, profitMargin: {min:0.3}, minUnitsSold:100, ... }
+```
+
+### Supported Regions
+
+| Code | Country | Currency | Enabled |
+|------|---------|----------|---------|
+| th | Thailand | THB | Yes |
+| id | Indonesia | IDR | Yes |
+| ph | Philippines | PHP | No |
+| vn | Vietnam | VND | No |
+| my | Malaysia | MYR | No |
+
+---
+
+## 9. Code Quality Checklist
 
 - [x] All external data validated with Zod
 - [x] All network requests have retry mechanism
@@ -259,7 +371,7 @@ Synced from `candidates` joined with `products`:
 
 ---
 
-## 8. References
+## 10. References
 
 - **Design Doc:** [docs/design.md](./design.md)
 - **GitHub:** [maoku-family/product-scout](https://github.com/maoku-family/product-scout)

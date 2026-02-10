@@ -59,52 +59,78 @@ FastMoss SEA → Shopee Validation → Google Trends → CJ Cost → Rule Filter
 
 | Platform | Collection Method | Data Content | Purpose | Frequency |
 |----------|-------------------|--------------|---------|-----------|
-| **TikTok SEA** | FastMoss (Playwright) | Top-selling products, GMV, growth rate, commission | Discover trending products | Daily |
-| **Shopee** | Direct API fetch | Search results, price, sales, rating | Validate market demand | Daily |
-| **Google Trends SEA** | google-trends-api | Keyword search trends | Supplementary trend signal | On-demand |
-| **CJ Dropshipping** | Official API | Product cost, shipping, inventory | Cost calculation | On-demand |
+| **TikTok SEA** | FastMoss (Playwright persistent context) | Top-selling products, GMV, growth rate, commission | Discover trending products | Daily |
+| **Shopee** | Direct API fetch (`/api/v4/search/search_items`) | Search results, price, sales, rating | Validate market demand | Daily |
+| **Google Trends SEA** | google-trends-api (90-day window) | Keyword search trends | Supplementary trend signal (10% weight) | On-demand |
+| **CJ Dropshipping** | Official REST API (POST search) | Product cost, shipping ($3 default), inventory | Cost calculation | On-demand |
+
+### Key Data Source Decisions
+
+| Original Plan | Actual Implementation | Reason |
+|---------------|----------------------|--------|
+| Apify for TikTok data | FastMoss Playwright scraper | Apify lacked SEA coverage; FastMoss provides direct ranking data with GMV, growth rate, commission |
+| Shopee Playwright scraper | Shopee direct API fetch | Shopee has a public search API; direct fetch is faster, more reliable, avoids browser overhead |
+| Real-time shipping costs | $3 USD default estimate | Actual CJ shipping varies by product/destination; $3 is a reasonable SEA average for lightweight items |
 
 ---
 
 ## 3. Filtering Rules
 
-### Basic Filters (configurable)
+### Basic Filters (configurable via config/rules.yaml)
+
+Two-stage filtering with defaults + per-region overrides:
 
 ```yaml
-# config/rules.yaml
-price_min: 10
-price_max: 30
-weight_max: 500
-profit_margin_min: 0.3
-shopee_sales_min: 100
-trend_status: rising
-excluded_categories:
-  - electronics
-  - food
-  - cosmetics
+# Pre-filter (before external API calls — reduces unnecessary requests)
+minUnitsSold: 100          # Minimum units sold on TikTok
+minGrowthRate: 0           # Minimum order growth rate
+excludedCategories:        # Skip these categories
+  - adult products
+  - weapons
+  - drugs
+
+# Post-filter (after Shopee/CJ enrichment)
+price:
+  min: 10                  # USD, Shopee validated price
+  max: 30
+profitMargin:
+  min: 0.3                 # 30% minimum margin (shopeePrice - cjPrice - shipping) / shopeePrice
 ```
+
+**Region overrides** (e.g., Thailand uses price 5-25, Indonesia uses price 3-15 + minUnitsSold 50).
+Post-filter gracefully skips checks when enrichment data is missing (e.g., no Shopee match found).
 
 ### Composite Scoring
 
-| Dimension | Weight | Calculation |
-|-----------|--------|-------------|
-| Sales Volume | 30% | unitsSold / maxUnits * 100 |
-| Order Growth | 20% | growthRate * 100 (capped at 100) |
-| Shopee Validation | 25% | log10(soldCount) / log10(1000) * 100 |
-| Profit Margin | 15% | profitMargin * 100 |
-| Google Trends | 10% | rising=100, stable=50, declining=0 |
+| Dimension | Weight | Calculation | Notes |
+|-----------|--------|-------------|-------|
+| Sales Volume | 30% | unitsSold / maxUnits * 100 | Relative to current batch max |
+| Order Growth | 20% | growthRate * 100 (capped at 100) | Direct percentage mapping |
+| Shopee Validation | 25% | log10(soldCount) / log10(1000) * 100 | **Log scale**: 10 sales ~ 33, 100 ~ 67, 1000+ = 100 |
+| Profit Margin | 15% | profitMargin * 100 | Based on (shopeePrice - cjPrice - shipping) / shopeePrice |
+| Google Trends | 10% | rising=100, stable=50, declining=0 | Falls back to "stable" (50 pts) on any error |
+
+**Final score**: Weighted sum of all dimensions, rounded to 1 decimal place (0-100 range).
 
 ---
 
-## 4. OpenClaw Integration
-
-### Interactive Commands
+## 4. CLI Commands
 
 | Command | Function |
 |---------|----------|
-| `/scout` | Run product selection flow immediately |
-| `/scout status` | Check today's collection status |
-| `/scout top 10` | View today's Top 10 candidates |
+| `bun run scripts/scout.ts --region th` | Run product selection flow |
+| `bun run scripts/scout.ts --region th --limit 5 --dry-run` | Dry run (no Notion sync) |
+| `bun run scripts/status.ts` | Check database status |
+| `bun run scripts/top.ts --limit 10` | View Top 10 candidates |
+
+### CLI Arguments (scout.ts)
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--region` | string | `th` | Target region (th, id, ph, vn, my) |
+| `--category` | string | - | Filter by category |
+| `--limit` | string | - | Max products to scrape |
+| `--dry-run` | boolean | false | Skip Notion sync |
 
 ---
 
@@ -130,48 +156,52 @@ excluded_categories:
 - [x] Implement scoring calculation (5-dimension weighted composite)
 - [x] Develop Notion sync module
 
-### Phase 4: OpenClaw Integration
-- [ ] Create SKILL.md entry file
-- [ ] Develop interactive command scripts
-- [ ] Test scheduled tasks
+### Phase 4: Scheduling & Automation
+- [ ] Implement scheduled execution (cron or similar)
+- [ ] Add monitoring and alerting
+- [ ] Support multi-region parallel runs
 
 ---
 
-## 6. Project Planning
+## 6. Research Findings
 
-### Research Items
+### Resolved Items
 
-| Item | Impact | Priority |
-|------|--------|----------|
-| Specific SEA country selection | Determines data collection region parameters | High |
-| Apify TikTok SEA support | May need alternative solution | High |
-| Shopee anti-scraping strategy | Affects data collection stability | Medium |
-| SEA price range research | Filter rule parameters | Medium |
-| CJ SEA shipping time/cost | Affects profit calculation | Medium |
+| Item | Resolution |
+|------|------------|
+| Specific SEA country selection | TH and ID enabled by default; PH, VN, MY available but disabled. Per-region config overrides supported. |
+| Apify TikTok SEA support | **Abandoned** — Apify lacked SEA coverage. Replaced with FastMoss Playwright scraper. |
+| Shopee anti-scraping strategy | Using direct API fetch (not browser scraping). Graceful degradation returns `[]` on block. Rate limiting via sequential processing. |
+| SEA price range research | Default $10-30 USD range with per-region overrides (TH: $5-25, ID: $3-15). |
+| CJ SEA shipping time/cost | Using $3 USD flat estimate for all SEA regions. Actual cost varies but this is sufficient for screening. |
 
 ### Risks and Mitigation
 
-| Risk | Level | Mitigation |
-|------|-------|------------|
-| Shopee anti-scraping | High | Rate limiting, only scrape public lists, proxy IP, graceful degradation |
-| TikTok SEA data unavailable | Medium | Manual observation or find other data sources |
-| Notion API rate limiting | Low | Batch writes, control frequency |
-| Inaccurate filtering rules | Expected | Iterate through practice |
+| Risk | Level | Mitigation | Status |
+|------|-------|------------|--------|
+| Shopee anti-scraping | Medium | Direct API (not browser), rate limiting, graceful `[]` degradation | Mitigated |
+| FastMoss session expiry | Medium | Persistent browser context, login redirect detection, manual re-login docs | Mitigated |
+| Google Trends rate limiting | Low | Falls back to "stable" (50 pts), only 10% weight | Mitigated |
+| Notion API rate limiting | Low | Sequential page creation, continues on individual failure | Mitigated |
+| Inaccurate filtering rules | Expected | Per-region config overrides, iterate through practice | Ongoing |
 
 ### Cost Estimate
 
 | Item | Cost | Notes |
 |------|------|-------|
-| Apify | ~$50/month | TikTok data collection |
-| Proxy IP | ~$20/month | For Shopee scraper (optional) |
-| OpenClaw | Free | Open source, runs locally |
-| **Total** | **~$50-70/month** | |
+| FastMoss | Free tier | Web scraping with persistent login |
+| CJ API | Free | Official REST API |
+| Google Trends | Free | google-trends-api package |
+| Notion | Free | API within workspace limits |
+| **Total** | **$0/month** | All services used within free tiers |
 
 ---
 
 ## 7. MVP Success Criteria
 
-- [ ] Can trigger collection flow on schedule or manually
-- [ ] Can see candidate product list in Notion
-- [ ] Each candidate has: TikTok data + Shopee validation + cost + score
-- [ ] Can record subjective judgment in Notion
+- [x] Can trigger collection flow manually via CLI (`bun run scripts/scout.ts`)
+- [x] Can see candidate product list in Notion
+- [x] Each candidate has: TikTok data + Shopee validation + cost + score
+- [x] Can record subjective judgment in Notion (manual fields: Image, Status, Notes)
+- [ ] Scheduled daily execution
+- [ ] Multi-region parallel runs

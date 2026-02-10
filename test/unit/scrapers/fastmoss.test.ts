@@ -1,19 +1,49 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { parseFastmossRanking, scrapeFastmoss } from "@/scrapers/fastmoss";
+// Make withRetry pass through immediately (no retries, no delays)
+vi.mock("@/utils/retry", () => ({
+  withRetry: vi
+    .fn()
+    .mockImplementation(async (fn: () => Promise<unknown>) => fn()),
+}));
 
-const fixturesDir = resolve(import.meta.dirname, "../../fixtures/fastmoss");
+import { scrapeFastmoss, transformRawRows } from "@/scrapers/fastmoss";
 
-describe("parseFastmossRanking", () => {
-  it("parses HTML rows into an array of FastmossProduct", () => {
-    const html = readFileSync(
-      resolve(fixturesDir, "ranking-page.html"),
-      "utf-8",
-    );
-    const products = parseFastmossRanking(html, "th", "2025-01-15");
+// --- transformRawRows tests (pure function, no mocks needed) ---
+
+describe("transformRawRows", () => {
+  const sampleRows = [
+    {
+      productName: "LED Ring Light",
+      shopName: "BeautyShop",
+      category: "美妆个护",
+      commissionRate: "8%",
+      unitsSold: "1500",
+      growthRate: "25.5%",
+      gmv: "4500.00",
+    },
+    {
+      productName: "Yoga Mat",
+      shopName: "FitStore",
+      category: "运动与户外",
+      commissionRate: "12%",
+      unitsSold: "800",
+      growthRate: "-5.2%",
+      gmv: "2400.00",
+    },
+    {
+      productName: "Phone Case",
+      shopName: "TechHub",
+      category: "",
+      commissionRate: "5%",
+      unitsSold: "3000",
+      growthRate: "45.0%",
+      gmv: "6000.00",
+    },
+  ];
+
+  it("transforms raw rows into FastmossProduct array", () => {
+    const products = transformRawRows(sampleRows, "th", "2025-01-15");
 
     expect(products).toHaveLength(3);
 
@@ -23,46 +53,28 @@ describe("parseFastmossRanking", () => {
     expect(first?.shopName).toBe("BeautyShop");
     expect(first?.country).toBe("th");
     expect(first?.unitsSold).toBe(1500);
-    expect(first?.gmv).toBe(4500.0);
+    expect(first?.gmv).toBe(4500);
     expect(first?.orderGrowthRate).toBeCloseTo(0.255);
     expect(first?.commissionRate).toBeCloseTo(0.08);
     expect(first?.scrapedAt).toBe("2025-01-15");
   });
 
-  it("handles missing category as null", () => {
-    const html = readFileSync(
-      resolve(fixturesDir, "ranking-page.html"),
-      "utf-8",
-    );
-    const products = parseFastmossRanking(html, "th", "2025-01-15");
-
-    // Third product has empty category
+  it("handles empty category as null", () => {
+    const products = transformRawRows(sampleRows, "th", "2025-01-15");
     const third = products[2];
     expect(third).toBeDefined();
     expect(third?.category).toBeNull();
   });
 
   it("handles negative growth rate", () => {
-    const html = readFileSync(
-      resolve(fixturesDir, "ranking-page.html"),
-      "utf-8",
-    );
-    const products = parseFastmossRanking(html, "th", "2025-01-15");
-
-    // Second product has -5.2% growth
+    const products = transformRawRows(sampleRows, "th", "2025-01-15");
     const second = products[1];
     expect(second).toBeDefined();
     expect(second?.orderGrowthRate).toBeCloseTo(-0.052);
   });
 
   it("validates each product with Zod schema", () => {
-    const html = readFileSync(
-      resolve(fixturesDir, "ranking-page.html"),
-      "utf-8",
-    );
-    const products = parseFastmossRanking(html, "th", "2025-01-15");
-
-    // All products should be valid — parser validates internally
+    const products = transformRawRows(sampleRows, "th", "2025-01-15");
     for (const product of products) {
       expect(product.productName).toBeTruthy();
       expect(product.unitsSold).toBeGreaterThanOrEqual(0);
@@ -71,44 +83,66 @@ describe("parseFastmossRanking", () => {
     }
   });
 
-  it("returns empty array for empty page", () => {
-    const html = readFileSync(resolve(fixturesDir, "empty-page.html"), "utf-8");
-    const products = parseFastmossRanking(html, "th", "2025-01-15");
-
+  it("returns empty array for empty input", () => {
+    const products = transformRawRows([], "th", "2025-01-15");
     expect(products).toHaveLength(0);
+  });
+
+  it("parses Chinese number format for sales volume", () => {
+    const rows = [
+      {
+        productName: "Test Product",
+        shopName: "TestShop",
+        category: "test",
+        commissionRate: "5%",
+        unitsSold: "2.28万",
+        growthRate: "10%",
+        gmv: "RM15.00万",
+      },
+    ];
+    const products = transformRawRows(rows, "my", "2025-01-15");
+    expect(products).toHaveLength(1);
+    expect(products[0]?.unitsSold).toBe(22800);
+    expect(products[0]?.gmv).toBe(150000);
   });
 });
 
-// --- scrapeFastmoss tests (mocked Playwright) ---
+// --- scrapeFastmoss tests (mocked CDP connection) ---
 
 vi.mock("playwright", () => ({
   chromium: {
-    launchPersistentContext: vi.fn(),
+    connectOverCDP: vi.fn(),
   },
 }));
 
 const playwrightMod: typeof import("playwright") = await import("playwright");
 // eslint-disable-next-line @typescript-eslint/unbound-method
-const { launchPersistentContext } = playwrightMod.chromium;
-const mockLaunchPersistentContext = vi.mocked(launchPersistentContext);
+const { connectOverCDP } = playwrightMod.chromium;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+const mockConnectOverCDP = connectOverCDP as unknown as ReturnType<
+  typeof vi.fn
+>;
 
 type MockPage = {
   goto: ReturnType<typeof vi.fn>;
   url: ReturnType<typeof vi.fn>;
-  content: ReturnType<typeof vi.fn>;
+  evaluate: ReturnType<typeof vi.fn>;
+  waitForSelector: ReturnType<typeof vi.fn>;
   waitForTimeout: ReturnType<typeof vi.fn>;
   close: ReturnType<typeof vi.fn>;
 };
 
 type MockContext = {
-  pages: ReturnType<typeof vi.fn>;
   newPage: ReturnType<typeof vi.fn>;
+};
+
+type MockBrowser = {
+  contexts: ReturnType<typeof vi.fn>;
   close: ReturnType<typeof vi.fn>;
 };
 
-/** Helper to create a mock Playwright Page */
 function createMockPage(
-  options: { url?: string; content?: string } = {},
+  options: { url?: string; rawRows?: unknown[] } = {},
 ): MockPage {
   return {
     goto: vi.fn().mockResolvedValue(undefined),
@@ -117,31 +151,26 @@ function createMockPage(
       .mockReturnValue(
         options.url ?? "https://www.fastmoss.com/e-commerce/saleslist",
       ),
-    content: vi
-      .fn()
-      .mockResolvedValue(
-        options.content ??
-          '<table class="ranking-table"><tbody></tbody></table>',
-      ),
+    evaluate: vi.fn().mockResolvedValue(options.rawRows ?? []),
+    waitForSelector: vi.fn().mockResolvedValue(undefined),
     waitForTimeout: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue(undefined),
   };
 }
 
-/** Helper to create a mock Playwright BrowserContext */
-function createMockContext(
-  pages: MockPage[] = [createMockPage()],
-): MockContext {
+function createMockBrowser(mockPage: MockPage): MockBrowser {
+  const mockContext: MockContext = {
+    newPage: vi.fn().mockResolvedValue(mockPage),
+  };
   return {
-    pages: vi.fn().mockReturnValue(pages),
-    newPage: vi.fn().mockResolvedValue(pages[0]),
+    contexts: vi.fn().mockReturnValue([mockContext]),
     close: vi.fn().mockResolvedValue(undefined),
   };
 }
 
-function setupMock(mockContext: MockContext): void {
+function setupMock(mockBrowser: MockBrowser): void {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-  mockLaunchPersistentContext.mockResolvedValueOnce(mockContext as never);
+  mockConnectOverCDP.mockResolvedValueOnce(mockBrowser as never);
 }
 
 describe("scrapeFastmoss", () => {
@@ -149,92 +178,117 @@ describe("scrapeFastmoss", () => {
     vi.restoreAllMocks();
   });
 
-  it("uses persistent context from db/browser-data/", async () => {
+  it("connects to Chrome via CDP", async () => {
     const mockPage = createMockPage();
-    const mockContext = createMockContext([mockPage]);
-    setupMock(mockContext);
+    const mockBrowser = createMockBrowser(mockPage);
+    setupMock(mockBrowser);
 
     await scrapeFastmoss({ region: "th" });
 
-    expect(mockLaunchPersistentContext).toHaveBeenCalledWith(
-      expect.stringContaining("browser-data"),
-      expect.any(Object),
-    );
+    expect(mockConnectOverCDP).toHaveBeenCalledWith("http://127.0.0.1:9222");
+  });
+
+  it("accepts custom CDP URL", async () => {
+    const mockPage = createMockPage();
+    const mockBrowser = createMockBrowser(mockPage);
+    setupMock(mockBrowser);
+
+    await scrapeFastmoss({ region: "th", cdpUrl: "http://localhost:9333" });
+
+    expect(mockConnectOverCDP).toHaveBeenCalledWith("http://localhost:9333");
   });
 
   it("detects expired session (redirected to login page)", async () => {
     const mockPage = createMockPage({
       url: "https://www.fastmoss.com/login",
     });
-    const mockContext = createMockContext([mockPage]);
-    setupMock(mockContext);
+    const mockBrowser = createMockBrowser(mockPage);
+    setupMock(mockBrowser);
 
     await expect(scrapeFastmoss({ region: "th" })).rejects.toThrow(
       /session.*expired|login/i,
     );
   });
 
-  it("calls parser on page content and returns products", async () => {
-    const html = `<table class="ranking-table"><tbody>
-      <tr class="product-row"><td class="product-name">Test</td><td class="shop-name">Shop</td><td class="category">beauty</td><td class="units-sold">100</td><td class="gmv">200</td><td class="growth-rate">10%</td><td class="commission-rate">5%</td></tr>
-    </tbody></table>`;
-    const mockPage = createMockPage({ content: html });
-    const mockContext = createMockContext([mockPage]);
-    setupMock(mockContext);
+  it("extracts data via page.evaluate and returns products", async () => {
+    const rawRows = [
+      {
+        productName: "Test Product",
+        shopName: "TestShop",
+        category: "beauty",
+        commissionRate: "5%",
+        unitsSold: "100",
+        growthRate: "10%",
+        gmv: "200",
+      },
+    ];
+    const mockPage = createMockPage({ rawRows });
+    const mockBrowser = createMockBrowser(mockPage);
+    setupMock(mockBrowser);
 
     const products = await scrapeFastmoss({ region: "th" });
 
     expect(products).toHaveLength(1);
-    expect(products[0]?.productName).toBe("Test");
+    expect(products[0]?.productName).toBe("Test Product");
+    expect(mockPage.evaluate).toHaveBeenCalled();
   });
 
-  it("closes browser context after scraping", async () => {
+  it("disconnects from CDP after scraping", async () => {
     const mockPage = createMockPage();
-    const mockContext = createMockContext([mockPage]);
-    setupMock(mockContext);
+    const mockBrowser = createMockBrowser(mockPage);
+    setupMock(mockBrowser);
 
     await scrapeFastmoss({ region: "th" });
 
-    expect(mockContext.close).toHaveBeenCalled();
+    expect(mockBrowser.close).toHaveBeenCalled();
   });
 
-  it("closes browser context even on error", async () => {
+  it("disconnects from CDP even on error", async () => {
     const mockPage = createMockPage({
       url: "https://www.fastmoss.com/login",
     });
-    const mockContext = createMockContext([mockPage]);
-    setupMock(mockContext);
+    const mockBrowser = createMockBrowser(mockPage);
+    setupMock(mockBrowser);
 
     await expect(scrapeFastmoss({ region: "th" })).rejects.toThrow();
-
-    expect(mockContext.close).toHaveBeenCalled();
+    expect(mockBrowser.close).toHaveBeenCalled();
   });
 
   it("applies limit to results", async () => {
-    const rows = Array.from(
-      { length: 5 },
-      (unused, i) =>
-        `<tr class="product-row"><td class="product-name">P${String(i)}</td><td class="shop-name">S${String(i)}</td><td class="category">cat</td><td class="units-sold">${String(100 + i)}</td><td class="gmv">${String(200 + i)}</td><td class="growth-rate">10%</td><td class="commission-rate">5%</td></tr>`,
-    ).join("\n");
-    const html = `<table class="ranking-table"><tbody>${rows}</tbody></table>`;
-    const mockPage = createMockPage({ content: html });
-    const mockContext = createMockContext([mockPage]);
-    setupMock(mockContext);
+    const rawRows = Array.from({ length: 5 }).map((unused, i) => ({
+      productName: `P${String(i)}`,
+      shopName: `S${String(i)}`,
+      category: "cat",
+      commissionRate: "5%",
+      unitsSold: String(100 + i),
+      growthRate: "10%",
+      gmv: String(200 + i),
+    }));
+    const mockPage = createMockPage({ rawRows });
+    const mockBrowser = createMockBrowser(mockPage);
+    setupMock(mockBrowser);
 
     const products = await scrapeFastmoss({ region: "th", limit: 2 });
-
     expect(products).toHaveLength(2);
   });
 
   it("navigates to correct URL with region and category", async () => {
     const mockPage = createMockPage();
-    const mockContext = createMockContext([mockPage]);
-    setupMock(mockContext);
+    const mockBrowser = createMockBrowser(mockPage);
+    setupMock(mockBrowser);
 
     await scrapeFastmoss({ region: "vn", category: "beauty" });
 
     const gotoCall = String(mockPage.goto.mock.calls[0]?.[0]);
     expect(gotoCall).toContain("country=vn");
     expect(gotoCall).toContain("category=beauty");
+  });
+
+  it("throws clear error when CDP connection fails", async () => {
+    mockConnectOverCDP.mockRejectedValueOnce(new Error("Connection refused"));
+
+    await expect(scrapeFastmoss({ region: "th" })).rejects.toThrow(
+      /Cannot connect to Chrome/,
+    );
   });
 });

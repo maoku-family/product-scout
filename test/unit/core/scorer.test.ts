@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  computeScore,
   scoreGrowth,
   scoreMargin,
   scoreSales,
   scoreShopee,
   scoreTrend,
 } from "@/core/scorer";
+import type { ScoreInput } from "@/core/scorer";
 
 describe("scoreSales", () => {
   it("returns 100 for the max seller", () => {
@@ -99,5 +101,81 @@ describe("scoreTrend", () => {
 
   it("returns 0 for declining", () => {
     expect(scoreTrend("declining")).toBe(0);
+  });
+});
+
+describe("computeScore", () => {
+  it("returns 100 for perfect data", () => {
+    const input: ScoreInput = {
+      unitsSold: 1000,
+      maxUnits: 1000,
+      growthRate: 1.0,
+      shopeeSoldCount: 10000,
+      profitMargin: 1.0,
+      trendStatus: "rising",
+    };
+    expect(computeScore(input)).toBe(100);
+  });
+
+  it("returns 0 for zero data", () => {
+    const input: ScoreInput = {
+      unitsSold: 0,
+      maxUnits: 1000,
+      growthRate: 0,
+      shopeeSoldCount: 0,
+      profitMargin: 0,
+      trendStatus: "declining",
+    };
+    expect(computeScore(input)).toBe(0);
+  });
+
+  it("calculates weighted score correctly for mixed data", () => {
+    const input: ScoreInput = {
+      unitsSold: 500,
+      maxUnits: 1000,
+      growthRate: 0.5,
+      shopeeSoldCount: 100,
+      profitMargin: 0.3,
+      trendStatus: "stable",
+    };
+
+    // sales: 50 * 0.30 = 15
+    // growth: 50 * 0.20 = 10
+    // shopee: ~67 * 0.25 = ~16.75
+    // margin: 30 * 0.15 = 4.5
+    // trend: 50 * 0.10 = 5
+    // Total: ~51.25
+    const score = computeScore(input);
+    expect(score).toBeGreaterThan(45);
+    expect(score).toBeLessThan(55);
+  });
+
+  it("rounds result to 1 decimal place", () => {
+    const input: ScoreInput = {
+      unitsSold: 333,
+      maxUnits: 1000,
+      growthRate: 0.33,
+      shopeeSoldCount: 50,
+      profitMargin: 0.25,
+      trendStatus: "stable",
+    };
+    const score = computeScore(input);
+    // Check it's rounded to 1 decimal
+    expect(score).toBe(Number(score.toFixed(1)));
+  });
+
+  it("handles undefined shopeeSoldCount (no Shopee data)", () => {
+    const input: ScoreInput = {
+      unitsSold: 500,
+      maxUnits: 1000,
+      growthRate: 0.5,
+      shopeeSoldCount: undefined,
+      profitMargin: 0.3,
+      trendStatus: "rising",
+    };
+    // shopee score = 0 (no data), rest still contributes
+    const score = computeScore(input);
+    expect(score).toBeGreaterThan(0);
+    expect(score).toBeLessThan(100);
   });
 });

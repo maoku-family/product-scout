@@ -61,3 +61,41 @@ export function scoreTrend(status: "rising" | "stable" | "declining"): number {
   };
   return scores[status] ?? 0;
 }
+
+export type ScoreInput = {
+  unitsSold: number;
+  maxUnits: number;
+  growthRate: number;
+  shopeeSoldCount: number | undefined;
+  profitMargin: number;
+  trendStatus: "rising" | "stable" | "declining";
+};
+
+const WEIGHTS = {
+  sales: 0.3,
+  growth: 0.2,
+  shopee: 0.25,
+  margin: 0.15,
+  trend: 0.1,
+} as const;
+
+/**
+ * Compute weighted composite score from all dimensions.
+ * Returns 0-100, rounded to 1 decimal place.
+ */
+export function computeScore(input: ScoreInput): number {
+  const salesScore = scoreSales(input.unitsSold, input.maxUnits);
+  const growthScore = scoreGrowth(input.growthRate);
+  const shopeeScore = scoreShopee(input.shopeeSoldCount);
+  const marginScore = scoreMargin(input.profitMargin);
+  const trendScore = scoreTrend(input.trendStatus);
+
+  const total =
+    salesScore * WEIGHTS.sales +
+    growthScore * WEIGHTS.growth +
+    shopeeScore * WEIGHTS.shopee +
+    marginScore * WEIGHTS.margin +
+    trendScore * WEIGHTS.trend;
+
+  return Number(total.toFixed(1));
+}

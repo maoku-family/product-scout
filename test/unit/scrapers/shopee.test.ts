@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { parseShopeeSearchResults } from "@/scrapers/shopee";
+import { parseShopeeSearchResults, searchShopee } from "@/scrapers/shopee";
 
 const fixturesDir = resolve(import.meta.dirname, "../../fixtures/shopee");
 
@@ -70,3 +70,106 @@ describe("parseShopeeSearchResults", () => {
     expect(products[0]?.updatedAt).toBe("2025-01-15");
   });
 });
+
+/* eslint-disable @typescript-eslint/naming-convention -- Shopee API mock data uses snake_case */
+
+const mockFetch = vi.fn();
+
+describe("searchShopee", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", mockFetch);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("constructs correct URL for the region", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ items: [] }),
+    });
+
+    await searchShopee({ keyword: "yoga mat", region: "th" });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("shopee.co.th"),
+      expect.any(Object),
+    );
+  });
+
+  it("returns parsed products from API response", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          items: [
+            {
+              item_basic: {
+                itemid: 999,
+                name: "Test Product",
+                price: 19900,
+                price_min: 19900,
+                historical_sold: 500,
+                item_rating: { rating_star: 4.5 },
+                shopid: 111,
+              },
+            },
+          ],
+        }),
+    });
+
+    const products = await searchShopee({ keyword: "test", region: "th" });
+
+    expect(products).toHaveLength(1);
+    expect(products[0]?.title).toBe("Test Product");
+    expect(products[0]?.price).toBe(199.0);
+  });
+
+  it("respects limit option", async () => {
+    const items = Array.from({ length: 5 }, (_unused, i) => ({
+      item_basic: {
+        itemid: i + 1,
+        name: `Product ${String(i + 1)}`,
+        price: 10000,
+        historical_sold: 100,
+        item_rating: { rating_star: 4.0 },
+        shopid: 100,
+      },
+    }));
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ items }),
+    });
+
+    const products = await searchShopee({
+      keyword: "test",
+      region: "th",
+      limit: 3,
+    });
+
+    expect(products.length).toBeLessThanOrEqual(3);
+  });
+
+  it("returns empty array on block/captcha (non-ok response)", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      statusText: "Forbidden",
+    });
+
+    const products = await searchShopee({ keyword: "test", region: "th" });
+
+    expect(products).toHaveLength(0);
+  });
+
+  it("returns empty array on network error (graceful degradation)", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("Network error"));
+
+    const products = await searchShopee({ keyword: "test", region: "th" });
+
+    expect(products).toHaveLength(0);
+  });
+});
+/* eslint-enable @typescript-eslint/naming-convention */

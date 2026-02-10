@@ -125,3 +125,60 @@ export function insertCandidate(
   `,
   ).run(productId, data.score, data.trendStatus, data.createdAt);
 }
+
+/**
+ * Get products with the latest scraped_at for a given region.
+ */
+export function getLatestProducts(db: Database, region: string): unknown[] {
+  return db
+    .prepare(
+      `
+    SELECT * FROM products
+    WHERE country = ?
+    AND scraped_at = (SELECT MAX(scraped_at) FROM products WHERE country = ?)
+  `,
+    )
+    .all(region, region);
+}
+
+/**
+ * Get candidates not yet synced to Notion, joined with product info.
+ */
+export function getUnsyncedCandidates(db: Database): unknown[] {
+  return db
+    .prepare(
+      `
+    SELECT c.*, p.product_name, p.shop_name, p.country, p.category
+    FROM candidates c
+    JOIN products p ON c.product_id = p.id
+    WHERE c.synced_to_notion = 0
+  `,
+    )
+    .all();
+}
+
+/**
+ * Get top N candidates by score descending, joined with product info.
+ */
+export function getTopCandidates(db: Database, limit: number): unknown[] {
+  return db
+    .prepare(
+      `
+    SELECT c.*, p.product_name, p.shop_name, p.country, p.category
+    FROM candidates c
+    JOIN products p ON c.product_id = p.id
+    ORDER BY c.score DESC
+    LIMIT ?
+  `,
+    )
+    .all(limit);
+}
+
+/**
+ * Mark a candidate as synced to Notion.
+ */
+export function markSynced(db: Database, candidateId: number): void {
+  db.prepare("UPDATE candidates SET synced_to_notion = 1 WHERE id = ?").run(
+    candidateId,
+  );
+}

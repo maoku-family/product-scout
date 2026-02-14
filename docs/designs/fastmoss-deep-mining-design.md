@@ -132,11 +132,13 @@ Product Flow:
   Lists/Search → Pre-filter → Product Detail → Score → Candidates → Notion
 
 Shop Flow (new):
-  Shop Search/Shop Lists → Shop Detail → Shop Product List
-       → Reverse-generate candidate products → merge into Product Flow
+  Shop Search/Shop Lists → shops + shop_snapshots
+       → Extract products from candidate shops
+       → products table (tagged discovery:shop-copy)
+       → merge into Product Flow (unified from Phase B onward)
 ```
 
-Both flows output to the same candidate pool with unified scoring and labeling.
+Shop Flow is a **product discovery channel**, not a separate pipeline. Once products are extracted from shops and inserted into the products table, they follow the exact same path as products discovered via lists or search. The shop-to-product association is tracked via `discovery:shop-copy` tags, not a dedicated join table.
 
 ### Available FastMoss Pages
 
@@ -264,20 +266,18 @@ scoring_profiles:
   blueOcean:
     name: "Blue Ocean"
     dimensions:
-      salesVolume: 25
-      competitionScore: 30       # inverse of creator + similar product count
+      competitionScore: 35       # inverse of creator + similar product count
+      salesVolume: 30
       creatorConversionRate: 20
-      categoryGrowth: 15
-      voc: 10
+      voc: 15
 
   highMargin:
     name: "High Margin"
     dimensions:
-      profitMargin: 35
+      profitMargin: 40
       gpm: 25
-      commissionRate: 15
+      commissionRate: 20
       pricePoint: 15
-      salesStability: 10
 
   shopCopy:
     name: "Shop Copy"
@@ -305,11 +305,9 @@ scoring_profiles:
 | gpm | Product detail page (creator GPM) | Detail |
 | commissionRate | Sales list / detail page | List |
 | voc | Product detail page (VOC insights) | Detail |
-| shopRating | Shop detail page | Shop flow |
-| productSalesInShop | Shop detail page (product list) | Shop flow |
+| shopRating | Shop snapshots | Shop flow |
+| productSalesInShop | Shop snapshots | Shop flow |
 | shopSalesGrowth | Shop snapshots | Shop flow |
-| categoryGrowth | Reserved for future (knowledge base) | — |
-| salesStability | Calculated from product_snapshots over time | Derived |
 | pricePoint | Product detail page / enrichments | Detail |
 | shopeeValidation | Shopee API (existing) | External API |
 | googleTrends | Google Trends API (existing) | External API |
@@ -471,6 +469,14 @@ Example rows:
 
 New data source = new rows with a new `source` value, no schema change.
 
+### Future: Competing Platform Support
+
+FastMoss is not the only TikTok data platform. Competitors like ChuHaiJiang (出海匠), Kalodata, and EchoTik offer similar data with different coverage and refresh rates. When we eventually want to add a second platform, the scraping layer should support it without changing the core engine.
+
+The key insight: the current `fastmoss.ts` scraper is tightly coupled to one platform's page structure, URL patterns, and login mechanism. A future refactor should introduce a `ScrapingPlatform` abstraction that encapsulates platform-specific concerns (login, browser config, anti-detection) while each page within a platform implements a `PageScraper` interface. A `ProductNormalizer` per platform would then map platform-specific fields into the unified `products` / `product_snapshots` schema.
+
+This is not in scope for this phase — we focus solely on FastMoss. But the scraper code should be organized so that all FastMoss-specific logic lives under `src/scrapers/fastmoss/`, making it natural to add `src/scrapers/chuhaijiang/` later without touching the core.
+
 ### Product Identity Across Sources
 
 ```
@@ -493,11 +499,11 @@ products table:
 Modify:  products, candidates
 Remove:  shopee_products, cost_data → merged into product_enrichments
 Add:     product_snapshots, product_details, product_enrichments,
-         shops, shop_snapshots, shop_products,
+         shops, shop_snapshots,
          tags, candidate_tags, candidate_score_details,
          scrape_queue
 
-Total: 4 → 12 tables
+Total: 4 → 11 tables
 ```
 
 ### Table Definitions
@@ -513,7 +519,6 @@ CREATE TABLE products (
   fastmoss_id      TEXT,
   product_name     TEXT NOT NULL,
   shop_name        TEXT NOT NULL,
-  shop_id          INTEGER REFERENCES shops(shop_id),
   country          TEXT NOT NULL,
   category         TEXT,
   subcategory      TEXT,
@@ -634,19 +639,6 @@ CREATE TABLE shop_snapshots (
   sales_growth_rate        REAL,
   new_product_sales_ratio  REAL,
   UNIQUE(shop_id, scraped_at, source)
-);
-```
-
-#### shop_products (new)
-
-```sql
-CREATE TABLE shop_products (
-  shop_id        INTEGER NOT NULL REFERENCES shops(shop_id),
-  product_id     INTEGER NOT NULL REFERENCES products(product_id),
-  sales_28d      INTEGER,
-  revenue_28d    REAL,
-  scraped_at     DATE NOT NULL,
-  UNIQUE(shop_id, product_id, scraped_at)
 );
 ```
 
@@ -817,11 +809,11 @@ scraping:
 
 ### In Scope (This Phase)
 
-- [ ] Database schema migration (4 → 12 tables)
+- [ ] Database schema migration (4 → 11 tables)
 - [ ] List layer scrapers (newProducts, hotlist, hotvideo)
 - [ ] Search layer scraper with configurable strategies
 - [ ] Product detail page scraper
-- [ ] Shop flow scrapers (shop search, shop detail, shop products)
+- [ ] Shop flow scrapers (shop search, shop detail → extract products)
 - [ ] Scrape queue with caching and quota management
 - [ ] Tag system (discovery + strategy + signal labels)
 - [ ] Multi-strategy scoring engine with YAML config
@@ -856,8 +848,11 @@ Daily Run (future: scheduled, current: manual CLI)
 │  │      → products (new entries) + product_snapshots (search results)
 │  │
 │  │  Shop Flow:
-│  │  └─ A3. Shop Scan (shop sales list / hot list / shop search)
-│  │      → shops + shop_snapshots
+│  │  ├─ A3. Shop Scan (shop sales list / hot list / shop search)
+│  │  │   → shops + shop_snapshots
+│  │  │
+│  │  └─ A4. Extract Products from Candidate Shops
+│  │      → products table (tagged discovery:shop-copy)
 │  │
 │  │  All discovered products merged & deduplicated in products table.
 │  │
@@ -871,8 +866,6 @@ Daily Run (future: scheduled, current: manual CLI)
 │  │      P1: Never-scraped new discoveries
 │  │      P2: Stale products (>7 days) that reappeared on lists
 │  │      P3: Manually marked "track" products
-│  │  B5. Shop copy: scrape target shop details → extract product lists
-│  │      → new products enter queue as P1
 │  │
 │  │  → Output: scrape_queue (up to 300 items/day)
 │  │
@@ -888,9 +881,6 @@ Daily Run (future: scheduled, current: manual CLI)
 │  │      → CJ API: cost + profit margin
 │  │      → Google Trends: search trend status
 │  │      → product_enrichments (unified multi-source table)
-│  │
-│  │  C3. Shop detail enrichment (for shop-copy strategy)
-│  │      → shop details + shop_products associations
 │  │
 │
 ├─ Phase D: Post-filter + Labeling + Scoring
@@ -955,7 +945,7 @@ Daily Run (future: scheduled, current: manual CLI)
 | Product discovery | Passive (list ranking) | Passive + active (strategy search + shop copy) |
 | Data depth | 7 fields from list table | List + detail page 30+ fields |
 | Pre-filtering | Simple threshold | Threshold + cache check + quota management |
-| Deep mining | None | Detail page + external APIs + shop details |
+| Deep mining | None | Detail page + external APIs |
 | Scoring | Fixed 5-dimension | 4 configurable strategy profiles |
 | Labels | None | 4 label types, auto-applied |
 | Output | Score + basic info | Multi-score + labels + signals + recommendation |

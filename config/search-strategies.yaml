@@ -1,0 +1,17 @@
+strategies:
+  blue-ocean-beauty:
+    name: "Blue Ocean - Beauty"
+    region: th
+    filters:
+      commissionRate: ">0.15"
+      creatorConversionRate: ">0.3"
+      totalSales: ">1000"
+      creatorCount: "<50"
+
+  high-margin-general:
+    name: "High Margin - General"
+    region: th
+    filters:
+      price: ">20"
+      commissionRate: ">0.10"
+      totalSales: ">500"

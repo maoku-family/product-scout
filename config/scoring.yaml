@@ -1,0 +1,47 @@
+scoringProfiles:
+  default:
+    name: "Composite Score"
+    dimensions:
+      salesVolume: 20
+      salesGrowthRate: 15
+      shopeeValidation: 15
+      profitMargin: 15
+      creatorCount: 10
+      hotIndex: 10
+      voc: 5
+      googleTrends: 5
+      recency: 5
+
+  trending:
+    name: "Trending / Explosive"
+    dimensions:
+      salesGrowthRate: 30
+      hotIndex: 25
+      videoViews: 20
+      recency: 15
+      creatorCount: 10
+
+  blueOcean:
+    name: "Blue Ocean"
+    dimensions:
+      competitionScore: 35
+      salesVolume: 30
+      creatorConversionRate: 20
+      voc: 15
+
+  highMargin:
+    name: "High Margin"
+    dimensions:
+      profitMargin: 40
+      gpm: 25
+      commissionRate: 20
+      pricePoint: 15
+
+  shopCopy:
+    name: "Shop Copy"
+    dimensions:
+      shopRating: 25
+      productSalesInShop: 30
+      shopSalesGrowth: 20
+      creatorConversionRate: 15
+      profitMargin: 10

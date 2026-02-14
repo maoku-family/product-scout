@@ -30,10 +30,24 @@ export const FilterSchema = z.object({
 
 export const RegionFilterOverrideSchema = FilterSchema.partial();
 
+// Scraping config (added to rules)
+export const ScrapingFreshnessSchema = z.object({
+  detailRefreshDays: z.number().default(7),
+  vocRefreshDays: z.number().default(14),
+  shopRefreshDays: z.number().default(7),
+});
+
+export const ScrapingConfigSchema = z.object({
+  dailyDetailBudget: z.number().default(300),
+  dailySearchBudget: z.number().default(300),
+  freshness: ScrapingFreshnessSchema,
+});
+
 export const RulesConfigSchema = z
   .object({
     defaults: FilterSchema,
     regions: z.record(z.string(), RegionFilterOverrideSchema).optional(),
+    scraping: ScrapingConfigSchema.optional(),
   })
   .refine((d) => d.defaults.price.min <= d.defaults.price.max, {
     message: "defaults price.min must be <= price.max",
@@ -51,8 +65,58 @@ export type Category = z.infer<typeof CategorySchema>;
 export type CategoriesConfig = z.infer<typeof CategoriesConfigSchema>;
 export type Filter = z.infer<typeof FilterSchema>;
 export type RegionFilterOverride = z.infer<typeof RegionFilterOverrideSchema>;
+export type ScrapingFreshness = z.infer<typeof ScrapingFreshnessSchema>;
+export type ScrapingConfig = z.infer<typeof ScrapingConfigSchema>;
 export type RulesConfig = z.infer<typeof RulesConfigSchema>;
 export type SecretsConfig = z.infer<typeof SecretsConfigSchema>;
+
+// Scoring config
+export const ScoringDimensionSchema = z.record(z.string(), z.number());
+
+export const ScoringProfileSchema = z.object({
+  name: z.string(),
+  dimensions: ScoringDimensionSchema,
+});
+
+export const ScoringConfigSchema = z.object({
+  scoringProfiles: z.record(z.string(), ScoringProfileSchema),
+});
+
+// Signal config
+export const SignalRuleSchema = z.object({
+  condition: z.string(),
+});
+
+export const SignalsConfigSchema = z.object({
+  signalRules: z.record(z.string(), SignalRuleSchema),
+});
+
+// Search strategy config
+export const SearchStrategyFilterSchema = z.record(
+  z.string(),
+  z.union([z.string(), z.number()]),
+);
+
+export const SearchStrategySchema = z.object({
+  name: z.string(),
+  region: z.string(),
+  filters: SearchStrategyFilterSchema,
+});
+
+export const SearchStrategiesConfigSchema = z.object({
+  strategies: z.record(z.string(), SearchStrategySchema),
+});
+
+export type ScoringDimension = z.infer<typeof ScoringDimensionSchema>;
+export type ScoringProfile = z.infer<typeof ScoringProfileSchema>;
+export type ScoringConfig = z.infer<typeof ScoringConfigSchema>;
+export type SignalRule = z.infer<typeof SignalRuleSchema>;
+export type SignalsConfig = z.infer<typeof SignalsConfigSchema>;
+export type SearchStrategyFilter = z.infer<typeof SearchStrategyFilterSchema>;
+export type SearchStrategy = z.infer<typeof SearchStrategySchema>;
+export type SearchStrategiesConfig = z.infer<
+  typeof SearchStrategiesConfigSchema
+>;
 
 function deepMerge(target: Filter, override: RegionFilterOverride): Filter {
   const result: Filter = {

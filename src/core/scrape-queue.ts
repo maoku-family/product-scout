@@ -1,14 +1,10 @@
 /* eslint-disable @typescript-eslint/naming-convention, @typescript-eslint/no-unsafe-type-assertion */
 import type { Database } from "bun:sqlite";
 
+import type { ScrapingFreshness } from "@/schemas/config";
 import { logger } from "@/utils/logger";
 
 // ── Types ───────────────────────────────────────────────────────────
-
-export type ScrapingFreshness = {
-  detailRefreshDays: number;
-  searchRefreshDays: number;
-};
 
 type QueueCandidate = {
   product_id: number;

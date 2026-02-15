@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeMultiScore, computeScore, normalizeValue } from "@/core/scorer";
+import { computeMultiScore, normalizeValue } from "@/core/scorer";
 import type { ScoringInput } from "@/core/scorer";
 import type { ScoringConfig } from "@/schemas/config";
 
@@ -576,97 +576,5 @@ describe("computeMultiScore", () => {
     const defaultScore = result.scores.default;
     expect(defaultScore).not.toBeNull();
     expect(defaultScore).toBeGreaterThan(40);
-  });
-});
-
-// ── computeScore (backward compatibility) ───────────────────────────
-
-/* eslint-disable @typescript-eslint/no-deprecated */
-describe("computeScore (backward compatibility)", () => {
-  it("still accepts the old ScoreInput type and returns a number", () => {
-    const input = {
-      unitsSold: 1000,
-      maxUnits: 1000,
-      growthRate: 1.0,
-      shopeeSoldCount: 10000 as number | undefined,
-      profitMargin: 1.0,
-      trendStatus: "rising" as const,
-    };
-    const score = computeScore(input);
-    expect(typeof score).toBe("number");
-    expect(score).toBeGreaterThanOrEqual(0);
-    expect(score).toBeLessThanOrEqual(100);
-  });
-
-  it("returns 100 for perfect data", () => {
-    const input = {
-      unitsSold: 1000,
-      maxUnits: 1000,
-      growthRate: 1.0,
-      shopeeSoldCount: 10000 as number | undefined,
-      profitMargin: 1.0,
-      trendStatus: "rising" as const,
-    };
-    expect(computeScore(input)).toBe(100);
-  });
-
-  it("returns 0 for zero data", () => {
-    const input = {
-      unitsSold: 0,
-      maxUnits: 1000,
-      growthRate: 0,
-      shopeeSoldCount: 0 as number | undefined,
-      profitMargin: 0,
-      trendStatus: "declining" as const,
-    };
-    expect(computeScore(input)).toBe(0);
-  });
-
-  it("calculates weighted score correctly for mixed data", () => {
-    const input = {
-      unitsSold: 500,
-      maxUnits: 1000,
-      growthRate: 0.5,
-      shopeeSoldCount: 100 as number | undefined,
-      profitMargin: 0.3,
-      trendStatus: "stable" as const,
-    };
-
-    // sales: 50 * 0.30 = 15
-    // growth: 50 * 0.20 = 10
-    // shopee: ~67 * 0.25 = ~16.75
-    // margin: 30 * 0.15 = 4.5
-    // trend: 50 * 0.10 = 5
-    // Total: ~51.25
-    const score = computeScore(input);
-    expect(score).toBeGreaterThan(45);
-    expect(score).toBeLessThan(55);
-  });
-
-  it("rounds result to 1 decimal place", () => {
-    const input = {
-      unitsSold: 333,
-      maxUnits: 1000,
-      growthRate: 0.33,
-      shopeeSoldCount: 50 as number | undefined,
-      profitMargin: 0.25,
-      trendStatus: "stable" as const,
-    };
-    const score = computeScore(input);
-    expect(score).toBe(Number(score.toFixed(1)));
-  });
-
-  it("handles undefined shopeeSoldCount", () => {
-    const input = {
-      unitsSold: 500,
-      maxUnits: 1000,
-      growthRate: 0.5,
-      shopeeSoldCount: undefined,
-      profitMargin: 0.3,
-      trendStatus: "rising" as const,
-    };
-    const score = computeScore(input);
-    expect(score).toBeGreaterThan(0);
-    expect(score).toBeLessThan(100);
   });
 });

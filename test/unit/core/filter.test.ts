@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { postFilter, preFilter, toPreFilterProduct } from "@/core/filter";
+import { postFilter, preFilter } from "@/core/filter";
 import type { PostFilterProduct, PreFilterProduct } from "@/core/filter";
 import type { Filter } from "@/schemas/config";
-import type { FastmossProduct } from "@/schemas/product";
 
 describe("preFilter", () => {
   const filters: Filter = {
@@ -84,31 +83,6 @@ describe("preFilter", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]?.source).toBe("saleslist");
-  });
-});
-
-describe("toPreFilterProduct", () => {
-  it("maps FastmossProduct to PreFilterProduct", () => {
-    const fastmoss: FastmossProduct = {
-      productName: "Test",
-      shopName: "Shop",
-      country: "th",
-      category: "beauty",
-      unitsSold: 500,
-      gmv: 1000,
-      orderGrowthRate: 0.5,
-      commissionRate: 0.1,
-      scrapedAt: "2025-01-01",
-    };
-
-    const result = toPreFilterProduct(fastmoss);
-
-    expect(result).toEqual({
-      productName: "Test",
-      category: "beauty",
-      unitsSold: 500,
-      growthRate: 0.5,
-    });
   });
 });
 

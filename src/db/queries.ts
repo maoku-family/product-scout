@@ -1,8 +1,6 @@
 /* eslint-disable @typescript-eslint/naming-convention, @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-non-null-assertion */
 import type { Database } from "bun:sqlite";
 
-import type { FastmossProduct } from "@/schemas/product";
-
 // ── Input types ─────────────────────────────────────────────────────
 
 export type UpsertProductInput = {
@@ -118,12 +116,6 @@ export type UpsertTagInput = {
   tagName: string;
 };
 
-export type EnqueueScrapeTargetInput = {
-  targetType: string;
-  targetId: string;
-  priority: number;
-};
-
 // ── Result types for read queries (snake_case to match DB columns) ──
 
 export type CandidateWithProduct = {
@@ -160,7 +152,6 @@ type ProductIdRow = { product_id: number };
 type ShopIdRow = { shop_id: number };
 type CandidateIdRow = { candidate_id: number };
 type TagIdRow = { tag_id: number };
-type CountRow = { cnt: number };
 
 // ── Allowed sort columns for getTopCandidates ───────────────────────
 
@@ -480,24 +471,6 @@ export function addCandidateTag(
 }
 
 // =====================================================================
-// 11. enqueueScrapeTarget
-// =====================================================================
-
-/**
- * INSERT OR IGNORE into scrape_queue. Skips duplicates on
- * (target_type, target_id).
- */
-export function enqueueScrapeTarget(
-  db: Database,
-  data: EnqueueScrapeTargetInput,
-): void {
-  db.prepare(
-    `INSERT OR IGNORE INTO scrape_queue (target_type, target_id, priority)
-     VALUES (?, ?, ?)`,
-  ).run(data.targetType, data.targetId, data.priority);
-}
-
-// =====================================================================
 // 12. dequeueNextTargets
 // =====================================================================
 
@@ -516,32 +489,6 @@ export function dequeueNextTargets(
        LIMIT ?`,
     )
     .all(limit) as ScrapeQueueRow[];
-}
-
-// =====================================================================
-// 13. markScrapeStatus
-// =====================================================================
-
-/**
- * UPDATE scrape_queue SET status. Sets last_scraped_at when status is 'done'.
- */
-export function markScrapeStatus(
-  db: Database,
-  queueId: number,
-  status: string,
-): void {
-  if (status === "done") {
-    db.prepare(
-      `UPDATE scrape_queue
-       SET status = ?, last_scraped_at = datetime('now')
-       WHERE queue_id = ?`,
-    ).run(status, queueId);
-  } else {
-    db.prepare(`UPDATE scrape_queue SET status = ? WHERE queue_id = ?`).run(
-      status,
-      queueId,
-    );
-  }
 }
 
 // =====================================================================
@@ -607,56 +554,4 @@ export function markSynced(db: Database, candidateId: number): void {
   db.prepare(
     `UPDATE candidates SET synced_to_notion = 1 WHERE candidate_id = ?`,
   ).run(candidateId);
-}
-
-// =====================================================================
-// 17. insertProducts (backward compatibility)
-// =====================================================================
-
-/**
- * Backward-compatible batch insert. Each FastmossProduct calls
- * upsertProduct + insertProductSnapshot. Returns the count of
- * newly inserted products (not snapshots).
- */
-export function insertProducts(
-  db: Database,
-  products: FastmossProduct[],
-): number {
-  const countBefore = (db
-    .prepare("SELECT COUNT(*) as cnt FROM products")
-    .get() as CountRow | undefined)!.cnt;
-
-  for (const p of products) {
-    const productId = upsertProduct(db, {
-      productName: p.productName,
-      shopName: p.shopName,
-      country: p.country,
-      category: p.category,
-      subcategory: null,
-    });
-
-    insertProductSnapshot(db, {
-      productId,
-      scrapedAt: p.scrapedAt,
-      source: "saleslist",
-      rank: null,
-      unitsSold: p.unitsSold,
-      salesAmount: p.gmv,
-      growthRate: p.orderGrowthRate,
-      totalUnitsSold: null,
-      totalSalesAmount: null,
-      commissionRate: p.commissionRate,
-      creatorCount: null,
-      videoViews: null,
-      videoLikes: null,
-      videoComments: null,
-      creatorConversionRate: null,
-    });
-  }
-
-  const countAfter = (db
-    .prepare("SELECT COUNT(*) as cnt FROM products")
-    .get() as CountRow | undefined)!.cnt;
-
-  return countAfter - countBefore;
 }

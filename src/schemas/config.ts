@@ -115,12 +115,8 @@ export const SearchStrategiesConfigSchema = z.object({
   strategies: z.record(z.string(), SearchStrategySchema),
 });
 
-export type ScoringDimension = z.infer<typeof ScoringDimensionSchema>;
-export type ScoringProfile = z.infer<typeof ScoringProfileSchema>;
 export type ScoringConfig = z.infer<typeof ScoringConfigSchema>;
-export type SignalRule = z.infer<typeof SignalRuleSchema>;
 export type SignalsConfig = z.infer<typeof SignalsConfigSchema>;
-export type SearchStrategyFilter = z.infer<typeof SearchStrategyFilterSchema>;
 export type SearchStrategy = z.infer<typeof SearchStrategySchema>;
 export type SearchStrategiesConfig = z.infer<
   typeof SearchStrategiesConfigSchema

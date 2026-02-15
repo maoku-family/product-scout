@@ -5,15 +5,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   addCandidateTag,
   dequeueNextTargets,
-  enqueueScrapeTarget,
   getTopCandidates,
   getUnsyncedCandidates,
   insertCandidateScoreDetail,
   insertProductEnrichment,
-  insertProducts,
   insertProductSnapshot,
   insertShopSnapshot,
-  markScrapeStatus,
   markSynced,
   upsertCandidate,
   upsertProduct,
@@ -154,18 +151,6 @@ type CandidateTagRow = {
   tag_id: number;
   created_at: string;
   created_by: string;
-};
-
-type ScrapeQueueRow = {
-  queue_id: number;
-  target_type: string;
-  target_id: string;
-  priority: number;
-  status: string;
-  last_scraped_at: string | null;
-  next_scrape_after: string | null;
-  retry_count: number;
-  created_at: string;
 };
 
 // ── Helper: seed a product for FK relationships ─────────────────────
@@ -1060,74 +1045,6 @@ describe("addCandidateTag", () => {
 });
 
 // =====================================================================
-// 11. enqueueScrapeTarget
-// =====================================================================
-
-describe("enqueueScrapeTarget", () => {
-  let db: Database;
-
-  beforeEach(() => {
-    resetDb();
-    db = initDb(":memory:");
-  });
-
-  it("enqueues a new scrape target", () => {
-    enqueueScrapeTarget(db, {
-      targetType: "product_detail",
-      targetId: "fm-001",
-      priority: 3,
-    });
-
-    const row = db
-      .prepare("SELECT * FROM scrape_queue WHERE target_id = ?")
-      .get("fm-001") as ScrapeQueueRow;
-    expect(row.target_type).toBe("product_detail");
-    expect(row.priority).toBe(3);
-    expect(row.status).toBe("pending");
-    expect(row.retry_count).toBe(0);
-  });
-
-  it("skips duplicate (target_type, target_id)", () => {
-    enqueueScrapeTarget(db, {
-      targetType: "product_detail",
-      targetId: "fm-001",
-      priority: 3,
-    });
-
-    enqueueScrapeTarget(db, {
-      targetType: "product_detail",
-      targetId: "fm-001",
-      priority: 5,
-    });
-
-    const rows = db
-      .prepare("SELECT * FROM scrape_queue WHERE target_id = ?")
-      .all("fm-001") as ScrapeQueueRow[];
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.priority).toBe(3); // original kept
-  });
-
-  it("allows same target_id with different target_type", () => {
-    enqueueScrapeTarget(db, {
-      targetType: "product_detail",
-      targetId: "fm-001",
-      priority: 3,
-    });
-
-    enqueueScrapeTarget(db, {
-      targetType: "shop_detail",
-      targetId: "fm-001",
-      priority: 2,
-    });
-
-    const rows = db
-      .prepare("SELECT * FROM scrape_queue WHERE target_id = ?")
-      .all("fm-001") as ScrapeQueueRow[];
-    expect(rows).toHaveLength(2);
-  });
-});
-
-// =====================================================================
 // 12. dequeueNextTargets
 // =====================================================================
 
@@ -1188,53 +1105,6 @@ describe("dequeueNextTargets", () => {
   it("returns empty array when no pending targets", () => {
     const results = dequeueNextTargets(db, 10);
     expect(results).toHaveLength(0);
-  });
-});
-
-// =====================================================================
-// 13. markScrapeStatus
-// =====================================================================
-
-describe("markScrapeStatus", () => {
-  let db: Database;
-
-  beforeEach(() => {
-    resetDb();
-    db = initDb(":memory:");
-    db.prepare(
-      `INSERT INTO scrape_queue (target_type, target_id, priority, status)
-       VALUES (?, ?, ?, ?)`,
-    ).run("product_detail", "fm-001", 3, "pending");
-  });
-
-  it("updates status to 'in_progress'", () => {
-    markScrapeStatus(db, 1, "in_progress");
-
-    const row = db
-      .prepare("SELECT * FROM scrape_queue WHERE queue_id = ?")
-      .get(1) as ScrapeQueueRow;
-    expect(row.status).toBe("in_progress");
-    expect(row.last_scraped_at).toBeNull(); // not done yet
-  });
-
-  it("updates status to 'done' and sets last_scraped_at", () => {
-    markScrapeStatus(db, 1, "done");
-
-    const row = db
-      .prepare("SELECT * FROM scrape_queue WHERE queue_id = ?")
-      .get(1) as ScrapeQueueRow;
-    expect(row.status).toBe("done");
-    expect(row.last_scraped_at).not.toBeNull();
-  });
-
-  it("updates status to 'failed'", () => {
-    markScrapeStatus(db, 1, "failed");
-
-    const row = db
-      .prepare("SELECT * FROM scrape_queue WHERE queue_id = ?")
-      .get(1) as ScrapeQueueRow;
-    expect(row.status).toBe("failed");
-    expect(row.last_scraped_at).toBeNull();
   });
 });
 
@@ -1443,149 +1313,5 @@ describe("markSynced", () => {
       .prepare("SELECT synced_to_notion FROM candidates WHERE candidate_id = ?")
       .get(c2) as { synced_to_notion: number };
     expect(row.synced_to_notion).toBe(0);
-  });
-});
-
-// =====================================================================
-// 17. insertProducts (backward compatibility)
-// =====================================================================
-
-describe("insertProducts (backward compatibility)", () => {
-  let db: Database;
-
-  beforeEach(() => {
-    resetDb();
-    db = initDb(":memory:");
-  });
-
-  it("inserts a batch of FastmossProduct and returns count of new products", () => {
-    const products = [
-      {
-        productName: "Product A",
-        shopName: "Shop 1",
-        country: "th",
-        category: "beauty",
-        unitsSold: 500,
-        gmv: 1000,
-        orderGrowthRate: 0.5,
-        commissionRate: 0.1,
-        scrapedAt: "2025-01-01",
-      },
-      {
-        productName: "Product B",
-        shopName: "Shop 2",
-        country: "th",
-        category: "home",
-        unitsSold: 300,
-        gmv: 600,
-        orderGrowthRate: 0.3,
-        commissionRate: 0.08,
-        scrapedAt: "2025-01-01",
-      },
-    ];
-
-    const count = insertProducts(db, products);
-    expect(count).toBe(2);
-
-    // Verify products table
-    const rows = db.prepare("SELECT * FROM products").all() as ProductRow[];
-    expect(rows).toHaveLength(2);
-    expect(rows[0]?.product_name).toBe("Product A");
-    expect(rows[1]?.product_name).toBe("Product B");
-  });
-
-  it("creates product_snapshots for each product", () => {
-    insertProducts(db, [
-      {
-        productName: "Product A",
-        shopName: "Shop 1",
-        country: "th",
-        category: "beauty",
-        unitsSold: 500,
-        gmv: 1000,
-        orderGrowthRate: 0.5,
-        commissionRate: 0.1,
-        scrapedAt: "2025-01-01",
-      },
-    ]);
-
-    const snapshots = db
-      .prepare("SELECT * FROM product_snapshots")
-      .all() as SnapshotRow[];
-    expect(snapshots).toHaveLength(1);
-    expect(snapshots[0]?.units_sold).toBe(500);
-    expect(snapshots[0]?.sales_amount).toBe(1000);
-    expect(snapshots[0]?.growth_rate).toBe(0.5);
-    expect(snapshots[0]?.commission_rate).toBe(0.1);
-    expect(snapshots[0]?.source).toBe("saleslist");
-    expect(snapshots[0]?.scraped_at).toBe("2025-01-01");
-  });
-
-  it("silently skips duplicates (same product_name + shop_name + country)", () => {
-    const product = {
-      productName: "Product A",
-      shopName: "Shop 1",
-      country: "th",
-      category: "beauty",
-      unitsSold: 500,
-      gmv: 1000,
-      orderGrowthRate: 0.5,
-      commissionRate: 0.1,
-      scrapedAt: "2025-01-01",
-    };
-
-    insertProducts(db, [product]);
-    const count = insertProducts(db, [product]); // same product, same date
-
-    expect(count).toBe(0);
-
-    // Still only 1 product and 1 snapshot
-    const products = db.prepare("SELECT * FROM products").all() as ProductRow[];
-    expect(products).toHaveLength(1);
-    const snapshots = db
-      .prepare("SELECT * FROM product_snapshots")
-      .all() as SnapshotRow[];
-    expect(snapshots).toHaveLength(1);
-  });
-
-  it("adds new snapshot when same product appears on different date", () => {
-    insertProducts(db, [
-      {
-        productName: "Product A",
-        shopName: "Shop 1",
-        country: "th",
-        category: "beauty",
-        unitsSold: 500,
-        gmv: 1000,
-        orderGrowthRate: 0.5,
-        commissionRate: 0.1,
-        scrapedAt: "2025-01-01",
-      },
-    ]);
-
-    const count = insertProducts(db, [
-      {
-        productName: "Product A",
-        shopName: "Shop 1",
-        country: "th",
-        category: "beauty",
-        unitsSold: 600,
-        gmv: 1200,
-        orderGrowthRate: 0.6,
-        commissionRate: 0.1,
-        scrapedAt: "2025-01-02",
-      },
-    ]);
-
-    // Product is not "new" but snapshot is new
-    expect(count).toBe(0); // product already existed
-
-    // 1 product, 2 snapshots
-    const products = db.prepare("SELECT * FROM products").all() as ProductRow[];
-    expect(products).toHaveLength(1);
-    const snapshots = db
-      .prepare("SELECT * FROM product_snapshots")
-      .all() as SnapshotRow[];
-    expect(snapshots).toHaveLength(2);
   });
 });

@@ -7,10 +7,8 @@ import {
   cjToEnrichment,
   shopeeToEnrichment,
 } from "@/core/enrichment-converters";
-import { preFilter } from "@/core/filter";
-import { postFilter } from "@/core/filter";
-import type { PreFilterProduct } from "@/core/filter";
-import type { PostFilterProduct } from "@/core/filter";
+import { postFilter, preFilter } from "@/core/filter";
+import type { PostFilterProduct, PreFilterProduct } from "@/core/filter";
 import { computeMultiScore } from "@/core/scorer";
 import type { ScoringInput } from "@/core/scorer";
 import { buildScrapeQueue, consumeQuota } from "@/core/scrape-queue";

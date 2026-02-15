@@ -1,5 +1,4 @@
 import type { Filter } from "@/schemas/config";
-import type { FastmossProduct } from "@/schemas/product";
 
 // ── Pre-filter types ────────────────────────────────────────────────
 
@@ -15,18 +14,6 @@ export type PreFilterProduct = {
   growthRate: number;
 };
 
-/**
- * Map a FastmossProduct to PreFilterProduct (backward compatibility).
- */
-export function toPreFilterProduct(p: FastmossProduct): PreFilterProduct {
-  return {
-    productName: p.productName,
-    category: p.category,
-    unitsSold: p.unitsSold,
-    growthRate: p.orderGrowthRate,
-  };
-}
-
 // ── Post-filter types ───────────────────────────────────────────────
 
 /**
@@ -38,19 +25,6 @@ export type PostFilterProduct = {
   shopeePrice?: number;
   profitMargin?: number;
 };
-
-// ── Backward compatibility ──────────────────────────────────────────
-
-/**
- * @deprecated Use PostFilterProduct instead.
- */
-export type EnrichedProduct = {
-  product: FastmossProduct;
-  shopeePrice?: number;
-  profitMargin?: number;
-};
-
-// ── Pre-filter ──────────────────────────────────────────────────────
 
 /**
  * Pre-filter: runs after data collection, before external requests.

@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   addCandidateTag,
-  insertProducts,
+  insertProductSnapshot,
   upsertCandidate,
+  upsertProduct,
   upsertTag,
 } from "@/db/queries";
 import type { CandidateWithProduct } from "@/db/queries";
@@ -26,6 +27,55 @@ const {
   getTagsForCandidate,
   getSignalsForCandidate,
 } = await import("@/core/sync");
+
+// ── Test helper: seed product using new API ─────────────────────────
+
+function seedTestProduct(
+  db: Database,
+  overrides: {
+    productName?: string;
+    shopName?: string;
+    country?: string;
+    category?: string;
+    unitsSold?: number;
+    gmv?: number;
+    orderGrowthRate?: number;
+    commissionRate?: number;
+    scrapedAt?: string;
+  } = {},
+): number {
+  const productName = overrides.productName ?? "LED Ring Light";
+  const shopName = overrides.shopName ?? "BeautyShop";
+  const country = overrides.country ?? "th";
+
+  const productId = upsertProduct(db, {
+    productName,
+    shopName,
+    country,
+    category: overrides.category ?? "beauty",
+    subcategory: null,
+  });
+
+  insertProductSnapshot(db, {
+    productId,
+    scrapedAt: overrides.scrapedAt ?? "2025-01-15",
+    source: "saleslist",
+    rank: null,
+    unitsSold: overrides.unitsSold ?? 1500,
+    salesAmount: overrides.gmv ?? 4500,
+    growthRate: overrides.orderGrowthRate ?? 0.25,
+    totalUnitsSold: null,
+    totalSalesAmount: null,
+    commissionRate: overrides.commissionRate ?? 0.08,
+    creatorCount: null,
+    videoViews: null,
+    videoLikes: null,
+    videoComments: null,
+    creatorConversionRate: null,
+  });
+
+  return productId;
+}
 
 // ── mapToNotionProperties ───────────────────────────────────────────
 
@@ -156,19 +206,7 @@ describe("getTagsForCandidate", () => {
   beforeEach(() => {
     resetDb();
     db = initDb(":memory:");
-    insertProducts(db, [
-      {
-        productName: "LED Ring Light",
-        shopName: "BeautyShop",
-        country: "th",
-        category: "beauty",
-        unitsSold: 1500,
-        gmv: 4500,
-        orderGrowthRate: 0.25,
-        commissionRate: 0.08,
-        scrapedAt: "2025-01-15",
-      },
-    ]);
+    seedTestProduct(db);
     upsertCandidate(db, {
       productId: 1,
       defaultScore: 85.5,
@@ -208,19 +246,7 @@ describe("getSignalsForCandidate", () => {
   beforeEach(() => {
     resetDb();
     db = initDb(":memory:");
-    insertProducts(db, [
-      {
-        productName: "LED Ring Light",
-        shopName: "BeautyShop",
-        country: "th",
-        category: "beauty",
-        unitsSold: 1500,
-        gmv: 4500,
-        orderGrowthRate: 0.25,
-        commissionRate: 0.08,
-        scrapedAt: "2025-01-15",
-      },
-    ]);
+    seedTestProduct(db);
     upsertCandidate(db, {
       productId: 1,
       defaultScore: 85.5,
@@ -271,19 +297,7 @@ describe("syncToNotion", () => {
     // Reset mock before each test
     mockCreate.mockReset().mockResolvedValue({ id: "notion-page-id" });
     // Insert test data
-    insertProducts(db, [
-      {
-        productName: "LED Ring Light",
-        shopName: "BeautyShop",
-        country: "th",
-        category: "beauty",
-        unitsSold: 1500,
-        gmv: 4500,
-        orderGrowthRate: 0.25,
-        commissionRate: 0.08,
-        scrapedAt: "2025-01-15",
-      },
-    ]);
+    seedTestProduct(db);
     upsertCandidate(db, {
       productId: 1,
       defaultScore: 85.5,
@@ -354,19 +368,15 @@ describe("syncToNotion", () => {
 
   it("handles partial failure — logs error but continues", async () => {
     // Insert a second candidate
-    insertProducts(db, [
-      {
-        productName: "Yoga Mat",
-        shopName: "FitStore",
-        country: "th",
-        category: "sports",
-        unitsSold: 800,
-        gmv: 2400,
-        orderGrowthRate: 0.15,
-        commissionRate: 0.12,
-        scrapedAt: "2025-01-15",
-      },
-    ]);
+    seedTestProduct(db, {
+      productName: "Yoga Mat",
+      shopName: "FitStore",
+      category: "sports",
+      unitsSold: 800,
+      gmv: 2400,
+      orderGrowthRate: 0.15,
+      commissionRate: 0.12,
+    });
     upsertCandidate(db, {
       productId: 2,
       defaultScore: 70,

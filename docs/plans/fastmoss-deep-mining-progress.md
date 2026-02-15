@@ -21,10 +21,12 @@
 | 14 | Pipeline orchestration (Phase A→E) | `feat: rewrite pipeline with 6-phase orchestration (A→E)` |
 | 15 | Notion sync updates (labels, multi-score) | `feat: update Notion sync with multi-score, labels, and signals` |
 | 16 | CLI updates (scout.ts, top.ts, status.ts) | `feat: update CLI scripts for multi-strategy pipeline` |
+| 17 | Remove stale code from deep-mining refactor | `chore: remove stale code from deep-mining refactor` |
+| 18 | Fix test failures + update docs | `fix: resolve test failures and update docs for deep-mining branch` |
 
 ## In Progress
 
-None — all Phase 3 tasks completed.
+None — all tasks completed. Branch ready for PR.
 
 ## TODO
 

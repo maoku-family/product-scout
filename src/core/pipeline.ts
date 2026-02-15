@@ -2,16 +2,19 @@ import type { Database } from "bun:sqlite";
 
 import { searchCjProduct } from "@/api/cj";
 import { getTrendStatus } from "@/api/google-trends";
+import {
+  cjToEnrichment,
+  shopeeToEnrichment,
+} from "@/core/enrichment-converters";
 import { postFilter, preFilter } from "@/core/filter";
 import type { EnrichedProduct } from "@/core/filter";
 import { computeScore } from "@/core/scorer";
 import type { ScoreInput } from "@/core/scorer";
 import { syncToNotion } from "@/core/sync";
 import {
-  insertCandidate,
-  insertCostData,
+  insertProductEnrichment,
   insertProducts,
-  insertShopeeProduct,
+  upsertCandidate,
 } from "@/db/queries";
 import type { Filter } from "@/schemas/config";
 import type { FastmossProduct } from "@/schemas/product";
@@ -54,26 +57,26 @@ type EnrichedItem = {
 
 /**
  * Look up the product ID from the database by unique key.
+ * UNIQUE constraint: (product_name, shop_name, country)
  */
 function findProductId(
   db: Database,
   productName: string,
   shopName: string,
   country: string,
-  scrapedAt: string,
 ): number | undefined {
   const row: unknown = db
     .prepare(
-      "SELECT id FROM products WHERE product_name = ? AND shop_name = ? AND country = ? AND scraped_at = ?",
+      "SELECT product_id FROM products WHERE product_name = ? AND shop_name = ? AND country = ?",
     )
-    .get(productName, shopName, country, scrapedAt);
+    .get(productName, shopName, country);
   if (
     row &&
     typeof row === "object" &&
-    "id" in row &&
-    typeof row.id === "number"
+    "product_id" in row &&
+    typeof row.product_id === "number"
   ) {
-    return row.id;
+    return row.product_id;
   }
   return undefined;
 }
@@ -130,7 +133,6 @@ export async function runPipeline(
       product.productName,
       product.shopName,
       product.country,
-      product.scrapedAt,
     );
 
     // ④ Shopee validation
@@ -146,14 +148,7 @@ export async function runPipeline(
     if (shopeeProduct && productId) {
       shopeePrice = shopeeProduct.price;
       shopeeSoldCount = shopeeProduct.soldCount;
-      insertShopeeProduct(db, productId, {
-        title: shopeeProduct.title,
-        price: shopeeProduct.price,
-        soldCount: shopeeProduct.soldCount,
-        rating: shopeeProduct.rating,
-        shopeeUrl: shopeeProduct.shopeeUrl,
-        updatedAt: shopeeProduct.updatedAt,
-      });
+      insertProductEnrichment(db, shopeeToEnrichment(shopeeProduct, productId));
     }
 
     // ⑤ Google Trends
@@ -179,13 +174,8 @@ export async function runPipeline(
         cjPrice = cjResult.cjPrice;
         shippingCost = cjResult.shippingCost;
         cjUrl = cjResult.cjUrl;
-        insertCostData(db, productId, {
-          cjPrice: cjResult.cjPrice,
-          shippingCost: cjResult.shippingCost,
-          profitMargin: cjResult.profitMargin,
-          cjUrl: cjResult.cjUrl,
-          updatedAt: new Date().toISOString().slice(0, 10),
-        });
+        const today = new Date().toISOString().slice(0, 10);
+        insertProductEnrichment(db, cjToEnrichment(cjResult, productId, today));
       }
     }
 
@@ -230,7 +220,6 @@ export async function runPipeline(
       item.product.productName,
       item.product.shopName,
       item.product.country,
-      item.product.scrapedAt,
     );
 
     const scoreInput: ScoreInput = {
@@ -244,10 +233,13 @@ export async function runPipeline(
     const score = computeScore(scoreInput);
 
     if (productId) {
-      insertCandidate(db, productId, {
-        score,
-        trendStatus: item.trendStatus,
-        createdAt: new Date().toISOString().slice(0, 10),
+      upsertCandidate(db, {
+        productId,
+        defaultScore: score,
+        trendingScore: null,
+        blueOceanScore: null,
+        highMarginScore: null,
+        shopCopyScore: null,
       });
       result.scored += 1;
     }

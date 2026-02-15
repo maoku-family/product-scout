@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/naming-convention, @typescript-eslint/no-unsafe-type-assertion */
 import type { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,6 +11,18 @@ import type { Filter } from "@/schemas/config";
 import type { FastmossProduct } from "@/schemas/product";
 import { scrapeFastmoss } from "@/scrapers/fastmoss";
 import { searchShopee } from "@/scrapers/shopee";
+
+type EnrichmentRow = {
+  enrichment_id: number;
+  product_id: number;
+  source: string;
+  price: number | null;
+  sold_count: number | null;
+  rating: number | null;
+  profit_margin: number | null;
+  extra: string | null;
+  scraped_at: string;
+};
 
 // Mock all external modules
 vi.mock("@/scrapers/fastmoss", () => ({
@@ -28,11 +41,18 @@ vi.mock("@/core/sync", () => ({
   syncToNotion: vi.fn(),
 }));
 
-const mockScrapeFastmoss = vi.mocked(scrapeFastmoss);
-const mockSearchShopee = vi.mocked(searchShopee);
-const mockGetTrendStatus = vi.mocked(getTrendStatus);
-const mockSearchCjProduct = vi.mocked(searchCjProduct);
-const mockSyncToNotion = vi.mocked(syncToNotion);
+// Cast to mock types for bun test runner compatibility (vi.mocked is not available)
+const mockScrapeFastmoss = scrapeFastmoss as unknown as ReturnType<
+  typeof vi.fn
+>;
+const mockSearchShopee = searchShopee as unknown as ReturnType<typeof vi.fn>;
+const mockGetTrendStatus = getTrendStatus as unknown as ReturnType<
+  typeof vi.fn
+>;
+const mockSearchCjProduct = searchCjProduct as unknown as ReturnType<
+  typeof vi.fn
+>;
+const mockSyncToNotion = syncToNotion as unknown as ReturnType<typeof vi.fn>;
 
 const testFilters: Filter = {
   price: { min: 5, max: 50 },
@@ -167,5 +187,64 @@ describe("runPipeline", () => {
     expect(mockScrapeFastmoss).toHaveBeenCalledWith(
       expect.objectContaining({ limit: 5 }),
     );
+  });
+
+  it("writes Shopee data to product_enrichments with source 'shopee'", async () => {
+    await runPipeline(
+      db,
+      { region: "th", dryRun: true },
+      testSecrets,
+      testFilters,
+    );
+
+    const rows = db
+      .prepare("SELECT * FROM product_enrichments WHERE source = ?")
+      .all("shopee") as EnrichmentRow[];
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.price).toBe(20);
+    expect(rows[0]?.sold_count).toBe(300);
+    expect(rows[0]?.rating).toBe(4.5);
+
+    const extra = JSON.parse(rows[0]?.extra ?? "{}") as Record<string, unknown>;
+    expect(extra.shopeeUrl).toBe("https://shopee.co.th/item/1");
+  });
+
+  it("writes CJ data to product_enrichments with source 'cj'", async () => {
+    await runPipeline(
+      db,
+      { region: "th", dryRun: true },
+      testSecrets,
+      testFilters,
+    );
+
+    const rows = db
+      .prepare("SELECT * FROM product_enrichments WHERE source = ?")
+      .all("cj") as EnrichmentRow[];
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.price).toBe(5);
+    expect(rows[0]?.profit_margin).toBe(0.6);
+
+    const extra = JSON.parse(rows[0]?.extra ?? "{}") as Record<string, unknown>;
+    expect(extra.cjUrl).toBe("https://cj.com/1");
+    expect(extra.shippingCost).toBe(3);
+  });
+
+  it("does not write enrichments when Shopee returns no results", async () => {
+    mockSearchShopee.mockResolvedValue([]);
+    mockSearchCjProduct.mockResolvedValue(null);
+
+    await runPipeline(
+      db,
+      { region: "th", dryRun: true },
+      testSecrets,
+      testFilters,
+    );
+
+    const rows = db
+      .prepare("SELECT * FROM product_enrichments")
+      .all() as EnrichmentRow[];
+    expect(rows).toHaveLength(0);
   });
 });

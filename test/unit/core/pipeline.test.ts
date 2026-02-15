@@ -268,7 +268,7 @@ describe("Pipeline (Phase A→E)", () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   // ── Phase A: Data Collection ────────────────────────────────────

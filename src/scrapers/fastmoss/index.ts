@@ -1,4 +1,10 @@
 export {
+  extractDetailPageDataScript,
+  scrapeProductDetail,
+  transformDetailPageData,
+} from "@/scrapers/fastmoss/detail";
+export type { RawDetailPageData } from "@/scrapers/fastmoss/detail";
+export {
   extractTableDataScript,
   scrapeFastmoss,
   transformRawRows,

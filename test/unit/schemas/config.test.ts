@@ -327,6 +327,40 @@ describe("SecretsConfigSchema", () => {
 
     expect(result.success).toBe(false);
   });
+
+  it("parses secrets with optional fastmoss credentials", () => {
+    const input = {
+      cjApiKey: "cj-key-123",
+      notionKey: "notion-key-456",
+      notionDbId: "db-id-789",
+      fastmossEmail: "user@example.com",
+      fastmossPassword: "secret123",
+    };
+
+    const result = SecretsConfigSchema.safeParse(input);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.fastmossEmail).toBe("user@example.com");
+      expect(result.data.fastmossPassword).toBe("secret123");
+    }
+  });
+
+  it("parses secrets without fastmoss credentials (backward compatible)", () => {
+    const input = {
+      cjApiKey: "cj-key-123",
+      notionKey: "notion-key-456",
+      notionDbId: "db-id-789",
+    };
+
+    const result = SecretsConfigSchema.safeParse(input);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.fastmossEmail).toBeUndefined();
+      expect(result.data.fastmossPassword).toBeUndefined();
+    }
+  });
 });
 
 describe("ScrapingConfigSchema", () => {

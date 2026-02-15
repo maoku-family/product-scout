@@ -290,7 +290,7 @@ export async function scrapeShopDetail(
       { maxRetries: 3, delay: 2000 },
     );
 
-    checkLoginStatus(page);
+    await checkLoginStatus(page);
 
     // Wait for content to load — shop detail uses card layout, not just tables
     await page.waitForTimeout(3000);

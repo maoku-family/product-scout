@@ -327,7 +327,7 @@ export async function scrapeShopSalesList(
       { maxRetries: 3, delay: 2000 },
     );
 
-    checkLoginStatus(page);
+    await checkLoginStatus(page);
     await page.waitForSelector("tr.ant-table-row", { timeout: 30000 });
     await page.waitForTimeout(2000);
 
@@ -383,7 +383,7 @@ export async function scrapeShopHotList(
       { maxRetries: 3, delay: 2000 },
     );
 
-    checkLoginStatus(page);
+    await checkLoginStatus(page);
     await page.waitForSelector("tr.ant-table-row", { timeout: 30000 });
     await page.waitForTimeout(2000);
 

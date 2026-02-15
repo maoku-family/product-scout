@@ -400,7 +400,7 @@ export async function scrapeProductDetail(
       { maxRetries: 3, delay: 2000 },
     );
 
-    checkLoginStatus(page);
+    await checkLoginStatus(page);
 
     // Wait for the detail page content to load
     await page.waitForTimeout(3000);

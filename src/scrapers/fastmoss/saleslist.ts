@@ -156,8 +156,8 @@ export async function scrapeFastmoss(
       { maxRetries: 3, delay: 2000 },
     );
 
-    // Check for login redirect (expired session)
-    checkLoginStatus(page);
+    // Check for login (not logged in if "Log in" button present)
+    await checkLoginStatus(page);
 
     // Wait for the Ant Design table to render
     await page.waitForSelector("tr.ant-table-row", { timeout: 30000 });

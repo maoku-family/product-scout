@@ -57,6 +57,8 @@ export const SecretsConfigSchema = z.object({
   cjApiKey: z.string(),
   notionKey: z.string(),
   notionDbId: z.string(),
+  fastmossEmail: z.string().optional(),
+  fastmossPassword: z.string().optional(),
 });
 
 export type Region = z.infer<typeof RegionSchema>;

@@ -126,7 +126,7 @@ const mockLaunchPersistentContext =
 
 type MockPage = {
   goto: ReturnType<typeof vi.fn>;
-  url: ReturnType<typeof vi.fn>;
+  $: ReturnType<typeof vi.fn>;
   evaluate: ReturnType<typeof vi.fn>;
   waitForSelector: ReturnType<typeof vi.fn>;
   waitForTimeout: ReturnType<typeof vi.fn>;
@@ -139,15 +139,17 @@ type MockContext = {
 };
 
 function createMockPage(
-  options: { url?: string; rawRows?: unknown[] } = {},
+  options: { notLoggedIn?: boolean; rawRows?: unknown[] } = {},
 ): MockPage {
   return {
     goto: vi.fn().mockResolvedValue(undefined),
-    url: vi
-      .fn()
-      .mockReturnValue(
-        options.url ?? "https://www.fastmoss.com/e-commerce/saleslist",
-      ),
+    $: vi.fn().mockResolvedValue(
+      options.notLoggedIn
+        ? {
+            /* mock element */
+          }
+        : null,
+    ),
     evaluate: vi.fn().mockResolvedValue(options.rawRows ?? []),
     waitForSelector: vi.fn().mockResolvedValue(undefined),
     waitForTimeout: vi.fn().mockResolvedValue(undefined),
@@ -208,15 +210,13 @@ describe("scrapeFastmoss", () => {
     );
   });
 
-  it("detects expired session (redirected to login page)", async () => {
-    const mockPage = createMockPage({
-      url: "https://www.fastmoss.com/login",
-    });
+  it("detects not logged in (Log in button present)", async () => {
+    const mockPage = createMockPage({ notLoggedIn: true });
     const mockContext = createMockContext(mockPage);
     setupMock(mockContext);
 
     await expect(scrapeFastmoss({ region: "th" })).rejects.toThrow(
-      /session.*expired|login/i,
+      /not logged in|Log in/i,
     );
   });
 
@@ -254,9 +254,7 @@ describe("scrapeFastmoss", () => {
   });
 
   it("closes context even on error", async () => {
-    const mockPage = createMockPage({
-      url: "https://www.fastmoss.com/login",
-    });
+    const mockPage = createMockPage({ notLoggedIn: true });
     const mockContext = createMockContext(mockPage);
     setupMock(mockContext);
 

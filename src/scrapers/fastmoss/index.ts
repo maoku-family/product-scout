@@ -58,6 +58,7 @@ export {
   checkLoginStatus,
   DEFAULT_PROFILE_DIR,
   FASTMOSS_BASE_URL,
+  isLoggedIn,
   launchFastmossContext,
   parsePercentage,
 } from "@/scrapers/fastmoss/shared";

@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 
-import type { BrowserContext } from "playwright";
+import type { BrowserContext, Page } from "playwright";
 import { chromium } from "playwright";
 
 import { logger } from "@/utils/logger";
@@ -40,15 +40,38 @@ export async function launchFastmossContext(
 }
 
 /**
- * Check if the current page has been redirected to a login page.
- * Throws an error if the session has expired.
+ * Selectors that match the login button in the FastMoss top bar.
+ * The Chinese UI shows "注册/登录", so we match "登录" (substring match).
+ * Also checks English "Log in" in case the UI language changes.
+ * Playwright's $() does not support comma-separated selectors, so we try each one.
  */
-export function checkLoginStatus(page: { url: () => string }): void {
-  const currentUrl = page.url();
-  if (currentUrl.includes("/login") || currentUrl.includes("/sign")) {
-    logger.error("FastMoss session expired — please login in Chrome");
+const LOGIN_BUTTON_SELECTORS = ["text=登录", "text=Log in"];
+
+/**
+ * Check if the current page is logged in to FastMoss.
+ * Detects the login button in the top bar — present on all pages when not logged in.
+ * Supports both Chinese ("登录") and English ("Log in") UI.
+ */
+export async function isLoggedIn(page: Page): Promise<boolean> {
+  for (const selector of LOGIN_BUTTON_SELECTORS) {
+    const loginButton = await page.$(selector);
+    if (loginButton !== null) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Check if the current page is logged in to FastMoss.
+ * Throws an error if not logged in (detected via login button in top bar).
+ */
+export async function checkLoginStatus(page: Page): Promise<void> {
+  const loggedIn = await isLoggedIn(page);
+  if (!loggedIn) {
+    logger.error("FastMoss not logged in — login button detected");
     throw new Error(
-      "FastMoss session expired. Please login at https://www.fastmoss.com in your Chrome browser.",
+      "FastMoss not logged in — login button detected. Run: bun run scripts/login.ts",
     );
   }
 }

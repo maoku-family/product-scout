@@ -15,8 +15,8 @@ export function parseChineseNumber(raw: string): number {
     return 0;
   }
 
-  // Remove currency prefixes (RM, Rp, ₱, $, etc.) and whitespace
-  let cleaned = raw.trim().replace(/^[A-Za-z₱$¥€£]+/, "");
+  // Remove currency prefixes (RM, Rp, ₱, $, ฿, etc.) and whitespace
+  let cleaned = raw.trim().replace(/^[A-Za-z₱$¥€£฿]+/, "");
 
   // Remove comma separators
   cleaned = cleaned.replace(/,/g, "");

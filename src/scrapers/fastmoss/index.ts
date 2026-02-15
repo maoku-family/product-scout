@@ -37,6 +37,24 @@ export type {
   RawSearchRowData,
 } from "@/scrapers/fastmoss/search";
 export {
+  extractShopDetailScript,
+  scrapeShopDetail,
+  transformShopDetailData,
+  transformShopProductRows,
+} from "@/scrapers/fastmoss/shop-detail";
+export type {
+  RawShopDetailData,
+  RawShopProductRow,
+} from "@/scrapers/fastmoss/shop-detail";
+export {
+  extractShopHotListScript,
+  extractShopSalesListScript,
+  scrapeShopHotList,
+  scrapeShopSalesList,
+  transformShopListRawRows,
+} from "@/scrapers/fastmoss/shop-list";
+export type { RawShopListRowData } from "@/scrapers/fastmoss/shop-list";
+export {
   checkLoginStatus,
   DEFAULT_PROFILE_DIR,
   FASTMOSS_BASE_URL,

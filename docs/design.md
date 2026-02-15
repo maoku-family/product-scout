@@ -88,6 +88,13 @@ flowchart TB
 
 ## 3. Filtering Rules
 
+> 本节描述从原始数据到最终候选商品的筛选和评估机制。对应 Pipeline 的 Phase B（预过滤 + 队列构建）和 Phase D（后过滤 + 评分 + 标签）。包含四个子系统：
+>
+> - **Basic Filters** — 两阶段过滤（预过滤减少不必要的深度爬取，后过滤基于富化数据筛选）
+> - **Multi-Strategy Scoring** — 5 套评分画像，从不同维度评估商品价值
+> - **Tag System** — 自动打标签，标记商品来源、信号特征和匹配策略
+> - **Scrape Queue** — 优先级队列，控制深度爬取的顺序和每日配额
+
 ### Basic Filters (configurable via config/rules.yaml)
 
 Two-stage filtering with defaults + per-region overrides:

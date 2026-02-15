@@ -219,6 +219,8 @@ Failed items retry up to 3 times before being marked permanently failed.
 | 6 | Functionality | Notion duplicate sync — each pipeline run creates new pages, no dedup or update mechanism | Duplicate entries accumulate in Notion | Open |
 | 7 | Functionality | No scheduled execution — Phase 4 not yet implemented, CLI-only | Requires manual trigger daily | Open |
 | 8 | Functionality | No multi-region parallel runs — regions must be run sequentially | Slower for multi-country scouting | Open |
+| 9 | Data Quality | FastMoss login detection is insufficient — `checkLoginStatus` only checks URL for `/login` or `/sign`, but FastMoss uses an overlay modal ("游客权限不足") without changing URL. Scrapers silently succeed with guest data. Need to verify: (a) whether guest DOM contains full data behind the overlay, (b) whether guest vs logged-in data differs in content or quantity | May be scraping incomplete or guest-only data without knowing | Open |
+| 10 | Data Quality | Database schema migration not handled — `initDb()` uses `CREATE TABLE IF NOT EXISTS`, so existing DB files with old schema cause `SQLiteError: table has no column named X`. Requires manual DB deletion on schema changes | Pipeline crashes on first run after schema upgrade | Open |
 
 ### MVP Success Criteria
 

@@ -86,7 +86,7 @@ flowchart TB
 
 ---
 
-## 3. Filtering Rules
+## 3. Product Selection Engine
 
 > 本节描述从原始数据到最终候选商品的筛选和评估机制。对应 Pipeline 的 Phase B（预过滤 + 队列构建）和 Phase D（后过滤 + 评分 + 标签）。包含四个子系统：
 >

@@ -86,9 +86,8 @@ product-scout/
 - Prevents dirty data from entering database
 
 **Error Handling:**
-- `withRetry` used on critical external calls:
-  - CJ API: 3 retries, 1s base delay, linear backoff (1s, 2s, 3s)
-  - FastMoss: 3 retries, 2s base delay, linear backoff (2s, 4s, 6s)
+- `withRetry` wraps all external calls (default: 3 retries, 1s base delay, linear backoff 1s/2s/3s):
+  - CJ API, FastMoss page navigation, FastMoss context launch
 - Graceful degradation (no retry) for non-critical sources:
   - Shopee: returns `[]` on block/error (pipeline continues without price validation)
   - Google Trends: returns `"stable"` on any error (5% weight, non-critical)
@@ -98,7 +97,7 @@ product-scout/
 
 **Pipeline Design:**
 - 5-phase pipeline (A→E) with clear separation of concerns
-- Products are processed **sequentially** to respect rate limits on external APIs
+- Scrapers run **sequentially** within each phase to respect rate limits on external APIs
 - Pre-filter (Phase B) runs **before** deep mining to minimize unnecessary requests
 - Post-filter (Phase D) runs **after** enrichment to filter on data that requires external lookups
 - Pipeline is **idempotent**: `UNIQUE` constraints on products table prevent duplicate entries across runs
@@ -108,6 +107,8 @@ product-scout/
 - WAL mode for better concurrent read performance
 - Singleton pattern via `getDb()` / `resetDb()`
 - 11 tables with normalized schema (see §6)
+- `INSERT OR IGNORE` for deduplication — same product from multiple sources only creates one record
+- Snapshot tables (`product_snapshots`, `shop_snapshots`) store time-series data per scrape per source
 
 ---
 

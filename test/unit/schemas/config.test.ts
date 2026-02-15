@@ -446,9 +446,9 @@ describe("ScoringProfileSchema", () => {
     const input = {
       name: "Composite Score",
       dimensions: {
-        salesVolume: 20,
-        salesGrowthRate: 15,
-        profitMargin: 15,
+        salesVolume: 40,
+        salesGrowthRate: 30,
+        profitMargin: 30,
       },
     };
 
@@ -457,13 +457,13 @@ describe("ScoringProfileSchema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.name).toBe("Composite Score");
-      expect(result.data.dimensions.salesVolume).toBe(20);
+      expect(result.data.dimensions.salesVolume).toBe(40);
     }
   });
 
   it("rejects when name is missing", () => {
     const input = {
-      dimensions: { salesVolume: 20 },
+      dimensions: { salesVolume: 100 },
     };
 
     const result = ScoringProfileSchema.safeParse(input);
@@ -490,8 +490,9 @@ describe("ScoringConfigSchema", () => {
         default: {
           name: "Composite Score",
           dimensions: {
-            salesVolume: 20,
-            salesGrowthRate: 15,
+            salesVolume: 40,
+            salesGrowthRate: 30,
+            profitMargin: 30,
           },
         },
         trending: {
@@ -499,6 +500,8 @@ describe("ScoringConfigSchema", () => {
           dimensions: {
             salesGrowthRate: 30,
             hotIndex: 25,
+            videoViews: 25,
+            recency: 20,
           },
         },
       },
@@ -511,6 +514,24 @@ describe("ScoringConfigSchema", () => {
       expect(Object.keys(result.data.scoringProfiles)).toHaveLength(2);
       expect(result.data.scoringProfiles.default?.name).toBe("Composite Score");
     }
+  });
+
+  it("rejects when dimension weights do not sum to 100", () => {
+    const input = {
+      scoringProfiles: {
+        bad: {
+          name: "Bad Profile",
+          dimensions: {
+            salesVolume: 20,
+            salesGrowthRate: 15,
+          },
+        },
+      },
+    };
+
+    const result = ScoringConfigSchema.safeParse(input);
+
+    expect(result.success).toBe(false);
   });
 
   it("rejects when scoringProfiles key is missing", () => {

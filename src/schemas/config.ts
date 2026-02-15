@@ -32,14 +32,14 @@ export const RegionFilterOverrideSchema = FilterSchema.partial();
 
 // Scraping config (added to rules)
 export const ScrapingFreshnessSchema = z.object({
-  detailRefreshDays: z.number().default(7),
-  vocRefreshDays: z.number().default(14),
-  shopRefreshDays: z.number().default(7),
+  detailRefreshDays: z.number().positive().default(7),
+  vocRefreshDays: z.number().positive().default(14),
+  shopRefreshDays: z.number().positive().default(7),
 });
 
 export const ScrapingConfigSchema = z.object({
-  dailyDetailBudget: z.number().default(300),
-  dailySearchBudget: z.number().default(300),
+  dailyDetailBudget: z.number().positive().default(300),
+  dailySearchBudget: z.number().positive().default(300),
   freshness: ScrapingFreshnessSchema,
 });
 
@@ -73,10 +73,18 @@ export type SecretsConfig = z.infer<typeof SecretsConfigSchema>;
 // Scoring config
 export const ScoringDimensionSchema = z.record(z.string(), z.number());
 
-export const ScoringProfileSchema = z.object({
-  name: z.string(),
-  dimensions: ScoringDimensionSchema,
-});
+export const ScoringProfileSchema = z
+  .object({
+    name: z.string(),
+    dimensions: ScoringDimensionSchema,
+  })
+  .refine(
+    (p) => {
+      const sum = Object.values(p.dimensions).reduce((a, b) => a + b, 0);
+      return sum === 100;
+    },
+    { message: "Dimension weights must sum to 100" },
+  );
 
 export const ScoringConfigSchema = z.object({
   scoringProfiles: z.record(z.string(), ScoringProfileSchema),
@@ -84,7 +92,7 @@ export const ScoringConfigSchema = z.object({
 
 // Signal config
 export const SignalRuleSchema = z.object({
-  condition: z.string(),
+  condition: z.string().min(1),
 });
 
 export const SignalsConfigSchema = z.object({

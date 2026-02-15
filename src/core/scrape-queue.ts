@@ -30,12 +30,16 @@ type RetryRow = {
  *   P2 (2) – product_details.scraped_at is stale AND product reappeared today
  *   P3 (1) – product is manually tagged "track"
  *
+ * When `allowedProductIds` is provided, only products in that set are
+ * considered (used to restrict to pre-filtered products).
+ *
  * Returns the number of items enqueued.
  */
 export function buildScrapeQueue(
   db: Database,
   budget: number,
   freshness: ScrapingFreshness,
+  allowedProductIds?: Set<number>,
 ): number {
   // Clear any old pending items so we rebuild from scratch
   db.prepare("DELETE FROM scrape_queue WHERE status = 'pending'").run();
@@ -53,6 +57,9 @@ export function buildScrapeQueue(
     .all() as Array<{ product_id: number }>;
 
   for (const row of p1Rows) {
+    if (allowedProductIds && !allowedProductIds.has(row.product_id)) {
+      continue;
+    }
     candidates.push({ product_id: row.product_id, priority: 3 });
   }
 
@@ -72,6 +79,9 @@ export function buildScrapeQueue(
   for (const row of p2Rows) {
     // Avoid duplicates if already added as P1
     if (!candidates.some((c) => c.product_id === row.product_id)) {
+      if (allowedProductIds && !allowedProductIds.has(row.product_id)) {
+        continue;
+      }
       candidates.push({ product_id: row.product_id, priority: 2 });
     }
   }

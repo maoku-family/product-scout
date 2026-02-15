@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { postFilter, preFilter } from "@/core/filter";
-import type { EnrichedProduct } from "@/core/filter";
+import { postFilter, preFilter, toPreFilterProduct } from "@/core/filter";
+import type { PostFilterProduct, PreFilterProduct } from "@/core/filter";
 import type { Filter } from "@/schemas/config";
 import type { FastmossProduct } from "@/schemas/product";
 
@@ -15,18 +15,13 @@ describe("preFilter", () => {
   };
 
   function makeProduct(
-    overrides: Partial<FastmossProduct> = {},
-  ): FastmossProduct {
+    overrides: Partial<PreFilterProduct> = {},
+  ): PreFilterProduct {
     return {
       productName: "Test Product",
-      shopName: "Test Shop",
-      country: "th",
       category: "beauty",
       unitsSold: 500,
-      gmv: 1000,
-      orderGrowthRate: 0.5,
-      commissionRate: 0.1,
-      scrapedAt: "2025-01-01",
+      growthRate: 0.5,
       ...overrides,
     };
   }
@@ -49,7 +44,7 @@ describe("preFilter", () => {
   });
 
   it("filters out product with negative growth rate when minGrowthRate is 0", () => {
-    const products = [makeProduct({ orderGrowthRate: -0.1 })];
+    const products = [makeProduct({ growthRate: -0.1 })];
 
     const result = preFilter(products, filters);
 
@@ -78,6 +73,43 @@ describe("preFilter", () => {
     expect(result).toHaveLength(0);
     expect(result).toEqual([]);
   });
+
+  it("works with extended types (extra fields preserved)", () => {
+    type ExtendedProduct = PreFilterProduct & { source: string };
+    const products: ExtendedProduct[] = [
+      { ...makeProduct(), source: "saleslist" },
+    ];
+
+    const result = preFilter(products, filters);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.source).toBe("saleslist");
+  });
+});
+
+describe("toPreFilterProduct", () => {
+  it("maps FastmossProduct to PreFilterProduct", () => {
+    const fastmoss: FastmossProduct = {
+      productName: "Test",
+      shopName: "Shop",
+      country: "th",
+      category: "beauty",
+      unitsSold: 500,
+      gmv: 1000,
+      orderGrowthRate: 0.5,
+      commissionRate: 0.1,
+      scrapedAt: "2025-01-01",
+    };
+
+    const result = toPreFilterProduct(fastmoss);
+
+    expect(result).toEqual({
+      productName: "Test",
+      category: "beauty",
+      unitsSold: 500,
+      growthRate: 0.5,
+    });
+  });
 });
 
 describe("postFilter", () => {
@@ -89,29 +121,17 @@ describe("postFilter", () => {
     excludedCategories: [],
   };
 
-  const baseProduct: FastmossProduct = {
-    productName: "Test Product",
-    shopName: "Test Shop",
-    country: "th",
-    category: "beauty",
-    unitsSold: 500,
-    gmv: 1000,
-    orderGrowthRate: 0.5,
-    commissionRate: 0.1,
-    scrapedAt: "2025-01-01",
-  };
-
-  function makeEnriched(
-    overrides: Partial<Omit<EnrichedProduct, "product">> = {},
-  ): EnrichedProduct {
+  function makePostProduct(
+    overrides: Partial<PostFilterProduct> = {},
+  ): PostFilterProduct {
     return {
-      product: baseProduct,
+      productId: 1,
       ...overrides,
     };
   }
 
   it("passes product with price in range", () => {
-    const products = [makeEnriched({ shopeePrice: 25, profitMargin: 0.5 })];
+    const products = [makePostProduct({ shopeePrice: 25, profitMargin: 0.5 })];
 
     const result = postFilter(products, filters);
 
@@ -119,7 +139,7 @@ describe("postFilter", () => {
   });
 
   it("filters out product with price below min", () => {
-    const products = [makeEnriched({ shopeePrice: 2, profitMargin: 0.5 })];
+    const products = [makePostProduct({ shopeePrice: 2, profitMargin: 0.5 })];
 
     const result = postFilter(products, filters);
 
@@ -127,7 +147,7 @@ describe("postFilter", () => {
   });
 
   it("filters out product with price above max", () => {
-    const products = [makeEnriched({ shopeePrice: 100, profitMargin: 0.5 })];
+    const products = [makePostProduct({ shopeePrice: 100, profitMargin: 0.5 })];
 
     const result = postFilter(products, filters);
 
@@ -135,7 +155,7 @@ describe("postFilter", () => {
   });
 
   it("filters out product with profit margin below min", () => {
-    const products = [makeEnriched({ shopeePrice: 25, profitMargin: 0.1 })];
+    const products = [makePostProduct({ shopeePrice: 25, profitMargin: 0.1 })];
 
     const result = postFilter(products, filters);
 
@@ -143,7 +163,7 @@ describe("postFilter", () => {
   });
 
   it("passes product without Shopee price data (not filtered by price)", () => {
-    const products = [makeEnriched({ profitMargin: 0.5 })];
+    const products = [makePostProduct({ profitMargin: 0.5 })];
 
     const result = postFilter(products, filters);
 
@@ -151,7 +171,7 @@ describe("postFilter", () => {
   });
 
   it("passes product without CJ cost data (not filtered by margin)", () => {
-    const products = [makeEnriched({ shopeePrice: 25 })];
+    const products = [makePostProduct({ shopeePrice: 25 })];
 
     const result = postFilter(products, filters);
 

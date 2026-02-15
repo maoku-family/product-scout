@@ -66,6 +66,23 @@ export const HotvideoItemSchema = z.object({
 
 export type HotvideoItem = z.infer<typeof HotvideoItemSchema>;
 
+// ── SearchItem (search page scraped data) ────────────────────────────
+
+export const SearchItemSchema = z.object({
+  productName: z.string(),
+  shopName: z.string(),
+  country: z.string(),
+  creatorConversionRate: z.number().min(0).max(1),
+  sevenDaySales: z.number().int().min(0),
+  sevenDayRevenue: z.number().min(0),
+  totalUnitsSold: z.number().int().min(0),
+  totalSalesAmount: z.number().min(0),
+  creatorCount: z.number().int().min(0),
+  scrapedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export type SearchItem = z.infer<typeof SearchItemSchema>;
+
 // ── ProductSchema (products table) ──────────────────────────────────
 
 export const ProductSchema = z.object({

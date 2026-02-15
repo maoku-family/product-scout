@@ -22,6 +22,15 @@ export {
 } from "@/scrapers/fastmoss/new-products";
 export type { RawNewProductsRowData } from "@/scrapers/fastmoss/new-products";
 export {
+  extractSearchTableDataScript,
+  scrapeSearch,
+  transformSearchRawRows,
+} from "@/scrapers/fastmoss/search";
+export type {
+  FastmossSearchOptions,
+  RawSearchRowData,
+} from "@/scrapers/fastmoss/search";
+export {
   checkLoginStatus,
   DEFAULT_PROFILE_DIR,
   FASTMOSS_BASE_URL,

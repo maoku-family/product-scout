@@ -1,83 +1,114 @@
 #!/usr/bin/env bun
+import { resolve } from "node:path";
+
 import { z } from "zod";
 
+import { loadConfig } from "@/config/loader";
 import { getDb } from "@/db/schema";
+import { RulesConfigSchema } from "@/schemas/config";
 import { logger } from "@/utils/logger";
 
-/* eslint-disable @typescript-eslint/naming-convention -- DB column names use snake_case */
-const ScrapeRowSchema = z.object({
-  scraped_at: z.string(),
-  count: z.number(),
-});
-/* eslint-enable @typescript-eslint/naming-convention */
-
-const RegionCountSchema = z.object({
-  country: z.string(),
-  count: z.number(),
-});
-
 const CountRowSchema = z.object({
+  count: z.number(),
+});
+
+const QueueStatusSchema = z.object({
+  status: z.string(),
   count: z.number(),
 });
 
 const db = getDb();
 
 try {
-  // Get latest scrape info
-  const latestScrapeRaw: unknown = db
-    .prepare(
-      "SELECT scraped_at, COUNT(*) as count FROM products GROUP BY scraped_at ORDER BY scraped_at DESC LIMIT 1",
-    )
-    .get();
-  const latestScrape = latestScrapeRaw
-    ? ScrapeRowSchema.parse(latestScrapeRaw)
-    : undefined;
+  console.log("\n=== Product Scout Status ===\n");
 
-  // Count by region
-  const regionCountsRaw: unknown[] = db
+  // ── Table counts (all 11 tables) ──────────────────────────────────
+  const tables = [
+    "products",
+    "product_snapshots",
+    "product_details",
+    "product_enrichments",
+    "shops",
+    "shop_snapshots",
+    "candidates",
+    "candidate_score_details",
+    "tags",
+    "candidate_tags",
+    "scrape_queue",
+  ] as const;
+
+  console.log("Table Counts:");
+  for (const table of tables) {
+    const raw: unknown = db
+      .prepare(`SELECT COUNT(*) as count FROM ${table}`)
+      .get();
+    const row = CountRowSchema.parse(raw);
+    console.log(`  ${table.padEnd(26)} ${String(row.count)}`);
+  }
+
+  // ── Scrape queue breakdown ────────────────────────────────────────
+  console.log("\nScrape Queue Breakdown:");
+  const queueRaw: unknown[] = db
     .prepare(
-      "SELECT country, COUNT(*) as count FROM products GROUP BY country ORDER BY count DESC",
+      "SELECT status, COUNT(*) as count FROM scrape_queue GROUP BY status ORDER BY status",
     )
     .all();
-  const regionCounts = regionCountsRaw.map((row) =>
-    RegionCountSchema.parse(row),
+  const queueRows = queueRaw.map((row) => QueueStatusSchema.parse(row));
+
+  if (queueRows.length === 0) {
+    console.log("  (empty)");
+  } else {
+    for (const row of queueRows) {
+      console.log(`  ${row.status.padEnd(10)} ${String(row.count)}`);
+    }
+  }
+
+  // ── Quota usage for today ─────────────────────────────────────────
+  console.log("\nToday's Quota Usage:");
+  const todayDoneRaw: unknown = db
+    .prepare(
+      `SELECT COUNT(*) as count FROM scrape_queue
+       WHERE status = 'done'
+         AND last_scraped_at >= datetime('now', 'start of day')`,
+    )
+    .get();
+  const todayDone = CountRowSchema.parse(todayDoneRaw).count;
+
+  // Load daily budget from config
+  let dailyBudget = 300; // default
+  try {
+    const configDir = resolve(import.meta.dirname, "../config");
+    const rules = loadConfig(
+      resolve(configDir, "rules.yaml"),
+      RulesConfigSchema,
+    );
+    dailyBudget = rules.scraping?.dailyDetailBudget ?? 300;
+  } catch {
+    // Fall back to default if config can't be loaded
+  }
+
+  console.log(
+    `  Detail pages scraped today: ${String(todayDone)} / ${String(dailyBudget)}`,
   );
 
-  // Unsynced candidates
+  // ── Candidate summary ─────────────────────────────────────────────
+  console.log("\nCandidate Summary:");
+  const totalRaw: unknown = db
+    .prepare("SELECT COUNT(*) as count FROM candidates")
+    .get();
+  const total = CountRowSchema.parse(totalRaw).count;
+
   const unsyncedRaw: unknown = db
     .prepare(
       "SELECT COUNT(*) as count FROM candidates WHERE synced_to_notion = 0",
     )
     .get();
-  const unsyncedCount = unsyncedRaw
-    ? CountRowSchema.parse(unsyncedRaw)
-    : undefined;
+  const unsynced = CountRowSchema.parse(unsyncedRaw).count;
 
-  // Total candidates
-  const totalRaw: unknown = db
-    .prepare("SELECT COUNT(*) as count FROM candidates")
-    .get();
-  const totalCandidates = totalRaw ? CountRowSchema.parse(totalRaw) : undefined;
+  console.log(`  Total candidates:     ${String(total)}`);
+  console.log(`  Unsynced to Notion:   ${String(unsynced)}`);
 
-  console.log("\n=== Product Scout Status ===\n");
-
-  if (latestScrape) {
-    console.log(
-      `Latest scrape: ${latestScrape.scraped_at} (${String(latestScrape.count)} products)`,
-    );
-  } else {
-    console.log("No data collected yet.");
-  }
-
-  if (regionCounts.length > 0) {
-    console.log("\nProducts by region:");
-    for (const row of regionCounts) {
-      console.log(`  ${row.country}: ${String(row.count)}`);
-    }
-  }
-
-  console.log(`\nTotal candidates: ${String(totalCandidates?.count ?? 0)}`);
-  console.log(`Unsynced to Notion: ${String(unsyncedCount?.count ?? 0)}`);
+  console.log("");
 } catch (error) {
   logger.error("Status check failed", error);
   process.exit(1);

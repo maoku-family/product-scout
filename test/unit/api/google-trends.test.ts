@@ -14,7 +14,7 @@ const mockInterestOverTime = vi.mocked(googleTrends.interestOverTime);
 
 describe("getTrendStatus", () => {
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("returns 'rising' when latest interest > average * 1.2", async () => {

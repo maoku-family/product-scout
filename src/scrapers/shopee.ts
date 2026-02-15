@@ -4,6 +4,8 @@ import { ShopeeProductSchema } from "@/schemas/shopee";
 import type { ShopeeProduct } from "@/schemas/shopee";
 import { logger } from "@/utils/logger";
 
+export { ShopeeProductSchema, type ShopeeProduct };
+
 export type ShopeeSearchOptions = {
   keyword: string;
   region: string;

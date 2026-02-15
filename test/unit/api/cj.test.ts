@@ -1,11 +1,14 @@
 /* eslint-disable @typescript-eslint/naming-convention, @typescript-eslint/no-unsafe-type-assertion */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CjCostResult } from "@/api/cj";
-import { searchCjProduct } from "@/api/cj";
 
-// Mock global fetch
+// Mock global fetch once at module level — avoids race conditions in parallel tests
 const mockFetch = vi.fn();
+globalThis.fetch = mockFetch as typeof fetch;
+
+// Import after mock setup so module captures the mocked fetch
+const { searchCjProduct } = await import("@/api/cj");
 
 function mockJsonResponse(body: unknown): {
   ok: boolean;
@@ -19,11 +22,7 @@ function mockJsonResponse(body: unknown): {
 
 describe("searchCjProduct", () => {
   beforeEach(() => {
-    vi.stubGlobal("fetch", mockFetch);
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
+    mockFetch.mockReset();
   });
 
   it("returns cost data for a valid CJ response", async () => {

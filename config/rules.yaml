@@ -21,3 +21,11 @@ regions:
       min: 3
       max: 15
     minUnitsSold: 50
+
+scraping:
+  dailyDetailBudget: 300
+  dailySearchBudget: 300
+  freshness:
+    detailRefreshDays: 7
+    vocRefreshDays: 14
+    shopRefreshDays: 7

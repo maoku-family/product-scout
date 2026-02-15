@@ -25,17 +25,43 @@
 
 ```
 product-scout/
-├── scripts/              # CLI entry points
+├── scripts/              # CLI entry points (scout.ts, status.ts, top.ts)
 ├── src/
-│   ├── scrapers/         # Data collection (FastMoss, Shopee)
+│   ├── scrapers/
+│   │   ├── shopee.ts     # Shopee API search (direct fetch)
+│   │   └── fastmoss/     # FastMoss scraper suite (10 files)
+│   │       ├── index.ts          # Re-exports all scrapers
+│   │       ├── saleslist.ts      # Top-selling product rankings
+│   │       ├── hotlist.ts        # Trending products
+│   │       ├── hotvideo.ts       # Viral video products
+│   │       ├── new-products.ts   # Recently listed products
+│   │       ├── search.ts         # Strategy-driven search
+│   │       ├── detail.ts         # Product detail page
+│   │       ├── shop-detail.ts    # Shop detail + product list
+│   │       ├── shop-list.ts      # Shop sales/hot rankings
+│   │       └── shared.ts         # Login check, context launch, URL constants
 │   ├── api/              # External API clients (CJ, Google Trends)
-│   ├── core/             # Business logic (filter, scorer, sync, pipeline)
+│   ├── core/             # Business logic
+│   │   ├── pipeline.ts           # 5-phase orchestrator (A→E)
+│   │   ├── filter.ts             # Two-stage filtering (pre + post)
+│   │   ├── scorer.ts             # Multi-strategy scoring (5 profiles)
+│   │   ├── tagger.ts             # Auto-tagging (discovery, signal, strategy)
+│   │   ├── scrape-queue.ts       # Priority queue + quota management
+│   │   ├── enrichment-converters.ts  # Shopee/CJ/Trends data normalization
+│   │   └── sync.ts               # Notion sync
 │   ├── schemas/          # Zod validation schemas
-│   ├── db/               # SQLite schema + queries
+│   ├── db/               # SQLite schema (11 tables) + queries
 │   ├── config/           # YAML config loader
 │   ├── types/            # Type declarations (.d.ts)
 │   └── utils/            # Logger, retry, number parser
-├── config/               # YAML config files (rules, regions, categories, secrets)
+├── config/               # YAML config files
+│   ├── rules.yaml        # Filter thresholds, region overrides, scraping budget
+│   ├── scoring.yaml      # 5 scoring profiles with dimension weights
+│   ├── signals.yaml      # 8 signal rules for auto-tagging
+│   ├── search-strategies.yaml  # Region-specific search strategies
+│   ├── regions.yaml      # Supported regions and currencies
+│   ├── categories.yaml   # Product categories with search keywords
+│   └── secrets.yaml      # API keys (.gitignore)
 ├── db/                   # SQLite database (.gitignore)
 ├── docs/                 # Design docs, plans, architecture
 └── test/
@@ -60,26 +86,29 @@ product-scout/
 - Prevents dirty data from entering database
 
 **Error Handling:**
-- `withRetry` used on critical external calls:
-  - CJ API: 3 retries, 1s base delay, linear backoff (1s, 2s, 3s)
-  - FastMoss: 3 retries, 2s base delay, linear backoff (2s, 4s, 6s)
+- `withRetry` wraps all external calls (default: 3 retries, 1s base delay, linear backoff 1s/2s/3s):
+  - CJ API, FastMoss page navigation, FastMoss context launch
 - Graceful degradation (no retry) for non-critical sources:
   - Shopee: returns `[]` on block/error (pipeline continues without price validation)
-  - Google Trends: returns `"stable"` on any error (10% weight, non-critical)
+  - Google Trends: returns `"stable"` on any error (5% weight, non-critical)
   - Notion sync: continues on individual page creation failure (logs error, processes remaining)
 - FastMoss: throws on session expired (requires manual re-login, cannot degrade)
 - Clear error logging before throwing
 
 **Pipeline Design:**
-- Products are processed **sequentially** (not in parallel) to respect rate limits on external APIs
-- Pre-filter runs **before** any external API calls to minimize unnecessary requests
-- Post-filter runs **after** enrichment to filter on data that requires external lookups (price, margin)
-- Pipeline is **idempotent**: `INSERT OR IGNORE` on products table prevents duplicate entries across runs
-- Foreign key linking: products are batch-inserted, then looked up by composite unique key (name + shop + country + date) to get auto-generated IDs
+- 5-phase pipeline (A→E) with clear separation of concerns
+- Scrapers run **sequentially** within each phase to respect rate limits on external APIs
+- Pre-filter (Phase B) runs **before** deep mining to minimize unnecessary requests
+- Post-filter (Phase D) runs **after** enrichment to filter on data that requires external lookups
+- Pipeline is **idempotent**: `UNIQUE` constraints on products table prevent duplicate entries across runs
+- Scrape queue with priority and daily budget controls deep mining volume
 
 **Database:**
 - WAL mode for better concurrent read performance
 - Singleton pattern via `getDb()` / `resetDb()`
+- 11 tables with normalized schema (see §6)
+- `INSERT OR IGNORE` for deduplication — same product from multiple sources only creates one record
+- Snapshot tables (`product_snapshots`, `shop_snapshots`) store time-series data per scrape per source
 
 ---
 
@@ -89,38 +118,48 @@ product-scout/
 
 | Module | Description |
 |--------|-------------|
-| `fastmoss.ts` | Scrapes FastMoss ranking via Playwright persistent context + system Chrome. DOM extraction via `page.evaluate()`. Parses Chinese number format (万/亿). Session preserved in `~/.product-scout-chrome`. |
-| `shopee.ts` | Searches Shopee via direct API fetch (no browser). Prices divided by 100 (Shopee uses cents). Returns `[]` on error. |
+| `scrapers/fastmoss/saleslist.ts` | Top-selling product rankings. DOM extraction via `page.evaluate()`. Parses Chinese number format (万/亿). |
+| `scrapers/fastmoss/hotlist.ts` | Trending products by hot index. Extracts creator count, video views, likes, comments. |
+| `scrapers/fastmoss/hotvideo.ts` | Products with viral videos. Shop name defaults to "unknown". |
+| `scrapers/fastmoss/new-products.ts` | Products listed in last 3 days. Captures listing date and early sales metrics. |
+| `scrapers/fastmoss/search.ts` | Strategy-driven search with configurable filters (commission, conversion, sales, creator count). |
+| `scrapers/fastmoss/detail.ts` | Product detail page. Extracts hot index, price, VOC (positive/negative), channel distribution, similar product count. |
+| `scrapers/fastmoss/shop-detail.ts` | Shop detail page + product list. Extracts shop metrics and per-product sales data. |
+| `scrapers/fastmoss/shop-list.ts` | Shop sales/hot rankings. Two modes: sales list and hot list. |
+| `scrapers/fastmoss/shared.ts` | Login status check, persistent Chrome context launch, URL constants, common utilities. |
+| `scrapers/shopee.ts` | Searches Shopee via direct API fetch (no browser). Prices divided by 100 (Shopee uses cents). Returns `[]` on error. |
 
 ### APIs
 
 | Module | Description |
 |--------|-------------|
-| `cj.ts` | Searches CJ product by keyword, calculates profit margin with $3 default shipping. Wrapped with `withRetry`. |
-| `google-trends.ts` | Queries 90-day trends. Returns rising/stable/declining. Falls back to "stable" on any error. |
+| `api/cj.ts` | Searches CJ product by keyword, calculates profit margin with $3 default shipping. Wrapped with `withRetry`. |
+| `api/google-trends.ts` | Queries 90-day trends. Returns rising/stable/declining. Falls back to "stable" on any error. |
 
 ### Core
 
 | Module | Description |
 |--------|-------------|
-| `filter.ts` | Two-stage pure functions. Pre-filter: minUnitsSold, minGrowthRate, excludedCategories. Post-filter: price range, profit margin. Skips checks when data is missing. |
-| `scorer.ts` | 5-dimension weighted composite (sales 30%, growth 20%, shopee 25%, margin 15%, trends 10%). Shopee uses log10 scale. |
-| `sync.ts` | Creates Notion pages for unsynced candidates. Continues on individual failures. |
-| `pipeline.ts` | Orchestrates the 10-step flow. Supports `dryRun` to skip Notion sync. |
+| `core/pipeline.ts` | 5-phase orchestrator (A→E). Supports `dryRun`, `skipScrape`, `strategyThreshold`, `shopDetailLimit`. See [design.md §1](./design.md#1-system-architecture) for phase details. |
+| `core/filter.ts` | Two-stage pure functions: pre-filter (Phase B) and post-filter (Phase D). Skips checks when data is missing. |
+| `core/scorer.ts` | Multi-strategy scoring engine. 5 profiles × configurable dimensions with normalization. Stores per-dimension breakdown in `candidate_score_details`. See [design.md §3](./design.md#3-product-selection-engine) for profiles and formulas. |
+| `core/tagger.ts` | Auto-tagging: discovery (source-based), signal (rule-based), strategy (score-threshold-based). See [design.md §3](./design.md#tag-system) for tag types and rules. |
+| `core/scrape-queue.ts` | Priority queue for deep mining with daily budget and retry logic. See [design.md §3](./design.md#scrape-queue) for priority definitions. |
+| `core/enrichment-converters.ts` | Normalizes Shopee/CJ data into `product_enrichments` format. |
+| `core/sync.ts` | Creates Notion pages for unsynced candidates. Maps 5 scores, labels (multi-select), signals (rich text). Continues on individual failures. |
 
 ### Database
 
 | Module | Description |
 |--------|-------------|
-| `schema.ts` | Initializes 4 tables (products, shopee_products, cost_data, candidates) with WAL mode. |
-| `queries.ts` | Insert + read queries for all tables. `INSERT OR IGNORE` for idempotency. `markSynced` for Notion tracking. |
+| `db/schema.ts` | Initializes 11 tables (products, product_snapshots, product_details, product_enrichments, shops, shop_snapshots, candidates, candidate_score_details, tags, candidate_tags, scrape_queue) with WAL mode. |
+| `db/queries.ts` | Insert + read + update queries for all tables. `INSERT OR IGNORE` for idempotency. Upsert functions for products, candidates, tags. `markSynced` for Notion tracking. |
 
 ### Config
 
 | Module | Description |
 |--------|-------------|
-| `loader.ts` | Generic `loadConfig<T>(filePath, zodSchema)` — reads YAML, validates with Zod. |
-| `config.ts` | Config schemas + `getFiltersForRegion()` deep-merge. Nested objects shallow-merged, arrays replaced entirely. |
+| `config/loader.ts` | Generic `loadConfig<T>(filePath, zodSchema)` — reads YAML, validates with Zod. |
 
 ---
 
@@ -139,28 +178,70 @@ Vitest runs outside Bun runtime, so `bun:sqlite` is unavailable. A Vitest alias 
 - Unit tests mock all external deps (Playwright, fetch, DB)
 - Integration tests use real file I/O (YAML loading)
 - Test fixtures in `test/fixtures/` (shopee JSON, config YAML)
+- Use `bun run test` (vitest) not `bun test` (Bun native runner) — Bun's native runner does not isolate module mocks between files
+
+### Mock Patterns
+
+- **Module mocks** (`vi.mock()`): Used for Playwright, Notion client, and module-level function mocks. Avoid `vi.restoreAllMocks()` in `afterEach` — use `vi.clearAllMocks()` instead to prevent cross-file mock leakage.
+- **Global mocks** (`globalThis.fetch = vi.fn()`): Used for fetch-based tests (Shopee, CJ). Assign once at module level, `mockReset()` in `beforeEach`.
+- **DB tests**: Use `initDb(":memory:")` + `resetDb()` per test for clean state.
 
 ---
 
 ## 6. Data Schema
 
-### SQLite Tables
+### SQLite Tables (11 tables)
 
 ```
-products (core)          1:1    shopee_products (Shopee validation)
-  ├── product_name (UK)  ────→   product_id (FK)
-  ├── shop_name (UK)             price, sold_count, rating
-  ├── country (UK)
-  ├── scraped_at (UK)    1:1    cost_data (CJ cost)
-  ├── category           ────→   product_id (FK)
-  ├── units_sold                 cj_price, shipping_cost, profit_margin
-  ├── gmv
-  ├── order_growth_rate  1:1    candidates (scored results)
-  └── commission_rate    ────→   product_id (FK)
-                                 score, trend_status, synced_to_notion
+products ─────────┬──→ product_snapshots (1:N, per scrape per source)
+  ├── product_id  │     ├── source: saleslist|newProducts|hotlist|hotvideo|search|shop-detail
+  ├── product_name│     ├── units_sold, sales_amount, growth_rate
+  ├── shop_name   │     ├── commission_rate, creator_count
+  ├── country     │     └── video_views, video_likes, video_comments
+  ├── category    │
+  └── subcategory ├──→ product_details (1:1, from detail page)
+                  │     ├── hot_index, popularity_index, price_usd
+                  │     ├── rating, review_count, creator_count
+                  │     ├── channel_video_pct, channel_live_pct
+                  │     ├── voc_positive, voc_negative (JSON arrays)
+                  │     └── similar_product_count
+                  │
+                  ├──→ product_enrichments (1:N, per source)
+                  │     ├── source: shopee|cj|google-trends
+                  │     ├── price, sold_count, rating, profit_margin
+                  │     └── extra (JSON: source-specific metadata)
+                  │
+                  └──→ candidates (1:1, scored)
+                        ├── default_score, trending_score
+                        ├── blue_ocean_score, high_margin_score, shop_copy_score
+                        ├── synced_to_notion
+                        ├──→ candidate_score_details (1:N, per profile per dimension)
+                        └──→ candidate_tags (N:M via tags)
+
+shops ──────────→ shop_snapshots (1:N, per scrape)
+  ├── fastmoss_shop_id    ├── total_sales, total_revenue
+  ├── shop_name           ├── active_products, creator_count
+  ├── country             ├── rating, positive_rate, ship_rate_48h
+  └── shop_type           └── national_rank, category_rank
+
+tags ──────────→ candidate_tags (N:M junction)
+  ├── tag_type: discovery|signal|strategy|manual
+  └── tag_name
+
+scrape_queue
+  ├── target_type: product_detail
+  ├── priority: 1(P3) | 2(P2) | 3(P1)
+  ├── status: pending|done|failed
+  └── retry_count (max 3)
 ```
 
-UK = composite unique key `(product_name, shop_name, country, scraped_at)`.
+Unique keys:
+- `products`: `(product_name, shop_name, country)`
+- `product_snapshots`: `(product_id, scraped_at, source)`
+- `product_enrichments`: `(product_id, source, scraped_at)`
+- `shops`: `(fastmoss_shop_id)`
+- `tags`: `(tag_type, tag_name)`
+
 Full SQL in `src/db/schema.ts`.
 
 ### Notion Database Fields
@@ -170,8 +251,13 @@ Synced from `candidates` joined with `products`:
 | Field | Source | Type |
 |-------|--------|------|
 | Product Name | products.product_name | Title |
-| Total Score | candidates.score | Number |
-| Trend | candidates.trend_status | Select |
+| Default Score | candidates.default_score | Number |
+| Trending Score | candidates.trending_score | Number |
+| Blue Ocean Score | candidates.blue_ocean_score | Number |
+| High Margin Score | candidates.high_margin_score | Number |
+| Shop Copy Score | candidates.shop_copy_score | Number |
+| Labels | candidate_tags (tag_type != signal) | Multi-select |
+| Signals | candidate_tags (tag_type = signal) | Rich text |
 | Category | products.category | Select |
 | Source | products.country | Select |
 | Discovery Date | candidates.created_at | Date |
@@ -183,9 +269,19 @@ Synced from `candidates` joined with `products`:
 
 ## 7. Configuration
 
-Config files in `config/`: `rules.yaml` (filtering rules), `regions.yaml`, `categories.yaml`, `secrets.yaml` (.gitignore).
+Config files in `config/`:
 
-### Merge Strategy
+| File | Purpose |
+|------|---------|
+| `rules.yaml` | Filter thresholds (pre/post), region overrides, scraping budget and freshness |
+| `scoring.yaml` | 5 scoring profiles with dimension weights |
+| `signals.yaml` | 8 signal rules for auto-tagging |
+| `search-strategies.yaml` | Region-specific FastMoss search strategies |
+| `regions.yaml` | Supported regions and currencies |
+| `categories.yaml` | Product categories with search keywords |
+| `secrets.yaml` | API keys (.gitignore) |
+
+### Filter Merge Strategy
 
 `getFiltersForRegion(rules, region)` deep-merges defaults with per-region overrides:
 - Nested objects (`price`, `profitMargin`) — shallow-merged, unspecified fields preserved

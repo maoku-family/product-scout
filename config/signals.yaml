@@ -1,0 +1,17 @@
+signalRules:
+  sales-surge:
+    condition: "salesGrowthRate > 1.0"
+  low-competition:
+    condition: "creatorCount < 50"
+  high-commission:
+    condition: "commissionRate > 0.15"
+  high-gpm:
+    condition: "gpm > 20"
+  viral-video:
+    condition: "maxVideoViews > 1000000"
+  good-reviews:
+    condition: "vocPositiveRate > 0.8"
+  new-product:
+    condition: "daysSinceListed < 30"
+  cross-border:
+    condition: "shopType == 'cross-border'"

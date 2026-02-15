@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Make withRetry pass through immediately (no retries, no delays)
 vi.mock("@/utils/retry", () => ({
@@ -168,8 +168,12 @@ function setupMock(mockContext: MockContext): void {
 }
 
 describe("scrapeFastmoss", () => {
+  beforeEach(() => {
+    mockLaunchPersistentContext.mockReset();
+  });
+
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("launches Chrome with persistent context", async () => {

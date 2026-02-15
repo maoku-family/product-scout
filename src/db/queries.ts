@@ -1,184 +1,557 @@
+/* eslint-disable @typescript-eslint/naming-convention, @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-non-null-assertion */
 import type { Database } from "bun:sqlite";
 
-import type { FastmossProduct } from "@/schemas/product";
+// ── Input types ─────────────────────────────────────────────────────
 
-export type ShopeeInsert = {
-  title: string;
-  price: number;
-  soldCount: number;
-  rating: number;
-  shopeeUrl: string;
-  updatedAt: string;
+export type UpsertProductInput = {
+  canonicalId?: string | null;
+  fastmossId?: string | null;
+  productName: string;
+  shopName: string;
+  country: string;
+  category: string | null;
+  subcategory: string | null;
 };
 
-export type CostInsert = {
-  cjPrice: number;
-  shippingCost: number;
-  profitMargin: number;
-  cjUrl: string;
-  updatedAt: string;
+export type InsertProductSnapshotInput = {
+  productId: number;
+  scrapedAt: string;
+  source: string;
+  rank: number | null;
+  unitsSold: number | null;
+  salesAmount: number | null;
+  growthRate: number | null;
+  totalUnitsSold: number | null;
+  totalSalesAmount: number | null;
+  commissionRate: number | null;
+  creatorCount: number | null;
+  videoViews: number | null;
+  videoLikes: number | null;
+  videoComments: number | null;
+  creatorConversionRate: number | null;
 };
 
-export type CandidateInsert = {
-  score: number;
-  trendStatus: string;
-  createdAt: string;
+export type UpsertProductDetailInput = {
+  productId: number;
+  fastmossId: string;
+  hotIndex: number | null;
+  popularityIndex: number | null;
+  price: number | null;
+  priceUsd: number | null;
+  commissionRate: number | null;
+  rating: number | null;
+  reviewCount: number | null;
+  listedAt: string | null;
+  stockStatus: string | null;
+  creatorCount: number | null;
+  videoCount: number | null;
+  liveCount: number | null;
+  channelVideoPct: number | null;
+  channelLivePct: number | null;
+  channelOtherPct: number | null;
+  vocPositive: string | null;
+  vocNegative: string | null;
+  similarProductCount: number | null;
+  scrapedAt: string;
 };
+
+export type InsertProductEnrichmentInput = {
+  productId: number;
+  source: string;
+  price: number | null;
+  soldCount: number | null;
+  rating: number | null;
+  profitMargin: number | null;
+  extra: string | null;
+  scrapedAt: string;
+};
+
+export type UpsertShopInput = {
+  fastmossShopId: string;
+  shopName: string;
+  country: string;
+  category: string | null;
+  shopType: string | null;
+};
+
+export type InsertShopSnapshotInput = {
+  shopId: number;
+  scrapedAt: string;
+  source: string;
+  totalSales: number | null;
+  totalRevenue: number | null;
+  activeProducts: number | null;
+  listedProducts: number | null;
+  creatorCount: number | null;
+  rating: number | null;
+  positiveRate: number | null;
+  shipRate48h: number | null;
+  nationalRank: number | null;
+  categoryRank: number | null;
+  salesGrowthRate: number | null;
+  newProductSalesRatio: number | null;
+};
+
+export type UpsertCandidateInput = {
+  productId: number;
+  defaultScore: number | null;
+  trendingScore: number | null;
+  blueOceanScore: number | null;
+  highMarginScore: number | null;
+  shopCopyScore: number | null;
+};
+
+export type InsertCandidateScoreDetailInput = {
+  candidateId: number;
+  profile: string;
+  dimension: string;
+  rawValue: number | null;
+  normalizedValue: number | null;
+  weight: number | null;
+  weightedScore: number | null;
+};
+
+export type UpsertTagInput = {
+  tagType: string;
+  tagName: string;
+};
+
+// ── Result types for read queries (snake_case to match DB columns) ──
+
+export type CandidateWithProduct = {
+  candidate_id: number;
+  product_id: number;
+  default_score: number | null;
+  trending_score: number | null;
+  blue_ocean_score: number | null;
+  high_margin_score: number | null;
+  shop_copy_score: number | null;
+  synced_to_notion: number;
+  created_at: string;
+  product_name: string;
+  shop_name: string;
+  country: string;
+  category: string | null;
+};
+
+export type ScrapeQueueRow = {
+  queue_id: number;
+  target_type: string;
+  target_id: string;
+  priority: number;
+  status: string;
+  last_scraped_at: string | null;
+  next_scrape_after: string | null;
+  retry_count: number;
+  created_at: string;
+};
+
+// ── Internal row types for SELECT queries ───────────────────────────
+
+type ProductIdRow = { product_id: number };
+type ShopIdRow = { shop_id: number };
+type CandidateIdRow = { candidate_id: number };
+type TagIdRow = { tag_id: number };
+
+// ── Allowed sort columns for getTopCandidates ───────────────────────
+
+const ALLOWED_SORT_COLUMNS = new Set([
+  "default_score",
+  "trending_score",
+  "blue_ocean_score",
+  "high_margin_score",
+  "shop_copy_score",
+]);
+
+// =====================================================================
+// 1. upsertProduct
+// =====================================================================
 
 /**
- * Insert a batch of products. Silently skips duplicates via INSERT OR IGNORE.
- * Returns the number of newly inserted rows.
+ * INSERT OR IGNORE into products. Returns product_id (existing or new).
+ * UNIQUE constraint: (product_name, shop_name, country)
  */
-export function insertProducts(
-  db: Database,
-  products: FastmossProduct[],
-): number {
-  const stmt = db.prepare(`
-    INSERT OR IGNORE INTO products
-    (product_name, shop_name, country, category, units_sold, gmv, order_growth_rate, commission_rate, scraped_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+export function upsertProduct(db: Database, data: UpsertProductInput): number {
+  db.prepare(
+    `INSERT OR IGNORE INTO products
+     (canonical_id, fastmoss_id, product_name, shop_name, country, category, subcategory)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    data.canonicalId ?? null,
+    data.fastmossId ?? null,
+    data.productName,
+    data.shopName,
+    data.country,
+    data.category,
+    data.subcategory,
+  );
 
-  let count = 0;
-  for (const p of products) {
-    const result = stmt.run(
-      p.productName,
-      p.shopName,
-      p.country,
-      p.category,
-      p.unitsSold,
-      p.gmv,
-      p.orderGrowthRate,
-      p.commissionRate,
-      p.scrapedAt,
-    );
-    if ((result as { changes: number }).changes > 0) {
-      count += 1;
-    }
-  }
-  return count;
+  // Retrieve existing or newly inserted product_id
+  const row = db
+    .prepare(
+      `SELECT product_id FROM products
+       WHERE product_name = ? AND shop_name = ? AND country = ?`,
+    )
+    .get(data.productName, data.shopName, data.country) as
+    | ProductIdRow
+    | undefined;
+
+  return row!.product_id;
 }
 
+// =====================================================================
+// 2. insertProductSnapshot
+// =====================================================================
+
 /**
- * Insert a Shopee product linked to a product by product_id.
+ * INSERT OR IGNORE into product_snapshots. Skips duplicates on
+ * (product_id, scraped_at, source).
  */
-export function insertShopeeProduct(
+export function insertProductSnapshot(
   db: Database,
-  productId: number,
-  data: ShopeeInsert,
+  data: InsertProductSnapshotInput,
 ): void {
   db.prepare(
-    `
-    INSERT INTO shopee_products
-    (product_id, title, price, sold_count, rating, shopee_url, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `,
+    `INSERT OR IGNORE INTO product_snapshots
+     (product_id, scraped_at, source, rank, units_sold, sales_amount,
+      growth_rate, total_units_sold, total_sales_amount, commission_rate,
+      creator_count, video_views, video_likes, video_comments, creator_conversion_rate)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
-    productId,
-    data.title,
+    data.productId,
+    data.scrapedAt,
+    data.source,
+    data.rank,
+    data.unitsSold,
+    data.salesAmount,
+    data.growthRate,
+    data.totalUnitsSold,
+    data.totalSalesAmount,
+    data.commissionRate,
+    data.creatorCount,
+    data.videoViews,
+    data.videoLikes,
+    data.videoComments,
+    data.creatorConversionRate,
+  );
+}
+
+// =====================================================================
+// 3. upsertProductDetail
+// =====================================================================
+
+/**
+ * INSERT OR REPLACE into product_details. One row per product_id.
+ */
+export function upsertProductDetail(
+  db: Database,
+  data: UpsertProductDetailInput,
+): void {
+  db.prepare(
+    `INSERT OR REPLACE INTO product_details
+     (product_id, fastmoss_id, hot_index, popularity_index, price, price_usd,
+      commission_rate, rating, review_count, listed_at, stock_status,
+      creator_count, video_count, live_count, channel_video_pct,
+      channel_live_pct, channel_other_pct, voc_positive, voc_negative,
+      similar_product_count, scraped_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    data.productId,
+    data.fastmossId,
+    data.hotIndex,
+    data.popularityIndex,
+    data.price,
+    data.priceUsd,
+    data.commissionRate,
+    data.rating,
+    data.reviewCount,
+    data.listedAt,
+    data.stockStatus,
+    data.creatorCount,
+    data.videoCount,
+    data.liveCount,
+    data.channelVideoPct,
+    data.channelLivePct,
+    data.channelOtherPct,
+    data.vocPositive,
+    data.vocNegative,
+    data.similarProductCount,
+    data.scrapedAt,
+  );
+}
+
+// =====================================================================
+// 4. insertProductEnrichment
+// =====================================================================
+
+/**
+ * INSERT OR IGNORE into product_enrichments. Skips duplicates on
+ * (product_id, source, scraped_at).
+ */
+export function insertProductEnrichment(
+  db: Database,
+  data: InsertProductEnrichmentInput,
+): void {
+  db.prepare(
+    `INSERT OR IGNORE INTO product_enrichments
+     (product_id, source, price, sold_count, rating, profit_margin, extra, scraped_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    data.productId,
+    data.source,
     data.price,
     data.soldCount,
     data.rating,
-    data.shopeeUrl,
-    data.updatedAt,
-  );
-}
-
-/**
- * Insert cost data linked to a product by product_id.
- */
-export function insertCostData(
-  db: Database,
-  productId: number,
-  data: CostInsert,
-): void {
-  db.prepare(
-    `
-    INSERT INTO cost_data
-    (product_id, cj_price, shipping_cost, profit_margin, cj_url, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `,
-  ).run(
-    productId,
-    data.cjPrice,
-    data.shippingCost,
     data.profitMargin,
-    data.cjUrl,
-    data.updatedAt,
+    data.extra,
+    data.scrapedAt,
   );
 }
 
+// =====================================================================
+// 5. upsertShop
+// =====================================================================
+
 /**
- * Insert a candidate linked to a product by product_id.
- * Multiple candidates per product_id are allowed (append model).
+ * INSERT OR IGNORE into shops. Returns shop_id (existing or new).
+ * UNIQUE constraint: fastmoss_shop_id
  */
-export function insertCandidate(
+export function upsertShop(db: Database, data: UpsertShopInput): number {
+  db.prepare(
+    `INSERT OR IGNORE INTO shops
+     (fastmoss_shop_id, shop_name, country, category, shop_type)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).run(
+    data.fastmossShopId,
+    data.shopName,
+    data.country,
+    data.category,
+    data.shopType,
+  );
+
+  const row = db
+    .prepare(`SELECT shop_id FROM shops WHERE fastmoss_shop_id = ?`)
+    .get(data.fastmossShopId) as ShopIdRow | undefined;
+
+  return row!.shop_id;
+}
+
+// =====================================================================
+// 6. insertShopSnapshot
+// =====================================================================
+
+/**
+ * INSERT OR IGNORE into shop_snapshots. Skips duplicates on
+ * (shop_id, scraped_at, source).
+ */
+export function insertShopSnapshot(
   db: Database,
-  productId: number,
-  data: CandidateInsert,
+  data: InsertShopSnapshotInput,
 ): void {
   db.prepare(
-    `
-    INSERT INTO candidates
-    (product_id, score, trend_status, created_at)
-    VALUES (?, ?, ?, ?)
-  `,
-  ).run(productId, data.score, data.trendStatus, data.createdAt);
+    `INSERT OR IGNORE INTO shop_snapshots
+     (shop_id, scraped_at, source, total_sales, total_revenue, active_products,
+      listed_products, creator_count, rating, positive_rate, ship_rate_48h,
+      national_rank, category_rank, sales_growth_rate, new_product_sales_ratio)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    data.shopId,
+    data.scrapedAt,
+    data.source,
+    data.totalSales,
+    data.totalRevenue,
+    data.activeProducts,
+    data.listedProducts,
+    data.creatorCount,
+    data.rating,
+    data.positiveRate,
+    data.shipRate48h,
+    data.nationalRank,
+    data.categoryRank,
+    data.salesGrowthRate,
+    data.newProductSalesRatio,
+  );
 }
 
+// =====================================================================
+// 7. upsertCandidate
+// =====================================================================
+
 /**
- * Get products with the latest scraped_at for a given region.
+ * INSERT OR REPLACE into candidates. One row per product_id.
+ * Returns candidate_id.
  */
-export function getLatestProducts(db: Database, region: string): unknown[] {
+export function upsertCandidate(
+  db: Database,
+  data: UpsertCandidateInput,
+): number {
+  db.prepare(
+    `INSERT OR REPLACE INTO candidates
+     (product_id, default_score, trending_score, blue_ocean_score,
+      high_margin_score, shop_copy_score)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(
+    data.productId,
+    data.defaultScore,
+    data.trendingScore,
+    data.blueOceanScore,
+    data.highMarginScore,
+    data.shopCopyScore,
+  );
+
+  const row = db
+    .prepare(`SELECT candidate_id FROM candidates WHERE product_id = ?`)
+    .get(data.productId) as CandidateIdRow | undefined;
+
+  return row!.candidate_id;
+}
+
+// =====================================================================
+// 8. insertCandidateScoreDetail
+// =====================================================================
+
+/**
+ * INSERT OR REPLACE into candidate_score_details. Primary key is
+ * (candidate_id, profile, dimension).
+ */
+export function insertCandidateScoreDetail(
+  db: Database,
+  data: InsertCandidateScoreDetailInput,
+): void {
+  db.prepare(
+    `INSERT OR REPLACE INTO candidate_score_details
+     (candidate_id, profile, dimension, raw_value, normalized_value, weight, weighted_score)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    data.candidateId,
+    data.profile,
+    data.dimension,
+    data.rawValue,
+    data.normalizedValue,
+    data.weight,
+    data.weightedScore,
+  );
+}
+
+// =====================================================================
+// 9. upsertTag
+// =====================================================================
+
+/**
+ * INSERT OR IGNORE into tags. Returns tag_id (existing or new).
+ * UNIQUE constraint: (tag_type, tag_name)
+ */
+export function upsertTag(db: Database, data: UpsertTagInput): number {
+  db.prepare(
+    `INSERT OR IGNORE INTO tags (tag_type, tag_name) VALUES (?, ?)`,
+  ).run(data.tagType, data.tagName);
+
+  const row = db
+    .prepare(`SELECT tag_id FROM tags WHERE tag_type = ? AND tag_name = ?`)
+    .get(data.tagType, data.tagName) as TagIdRow | undefined;
+
+  return row!.tag_id;
+}
+
+// =====================================================================
+// 10. addCandidateTag
+// =====================================================================
+
+/**
+ * INSERT OR IGNORE into candidate_tags. Links a candidate to a tag.
+ */
+export function addCandidateTag(
+  db: Database,
+  candidateId: number,
+  tagId: number,
+): void {
+  db.prepare(
+    `INSERT OR IGNORE INTO candidate_tags (candidate_id, tag_id) VALUES (?, ?)`,
+  ).run(candidateId, tagId);
+}
+
+// =====================================================================
+// 12. dequeueNextTargets
+// =====================================================================
+
+/**
+ * SELECT top N pending targets ordered by priority DESC, created_at ASC.
+ */
+export function dequeueNextTargets(
+  db: Database,
+  limit: number,
+): ScrapeQueueRow[] {
   return db
     .prepare(
-      `
-    SELECT * FROM products
-    WHERE country = ?
-    AND scraped_at = (SELECT MAX(scraped_at) FROM products WHERE country = ?)
-  `,
+      `SELECT * FROM scrape_queue
+       WHERE status = 'pending'
+       ORDER BY priority DESC, created_at ASC
+       LIMIT ?`,
     )
-    .all(region, region);
+    .all(limit) as ScrapeQueueRow[];
 }
 
+// =====================================================================
+// 14. getUnsyncedCandidates
+// =====================================================================
+
 /**
- * Get candidates not yet synced to Notion, joined with product info.
+ * SELECT candidates where synced_to_notion = 0, JOIN products for product info.
+ * Includes all multi-strategy scores.
  */
-export function getUnsyncedCandidates(db: Database): unknown[] {
+export function getUnsyncedCandidates(db: Database): CandidateWithProduct[] {
   return db
     .prepare(
-      `
-    SELECT c.*, p.product_name, p.shop_name, p.country, p.category
-    FROM candidates c
-    JOIN products p ON c.product_id = p.id
-    WHERE c.synced_to_notion = 0
-  `,
+      `SELECT c.candidate_id, c.product_id, c.default_score, c.trending_score,
+              c.blue_ocean_score, c.high_margin_score, c.shop_copy_score,
+              c.synced_to_notion, c.created_at,
+              p.product_name, p.shop_name, p.country, p.category
+       FROM candidates c
+       JOIN products p ON c.product_id = p.product_id
+       WHERE c.synced_to_notion = 0`,
     )
-    .all();
+    .all() as CandidateWithProduct[];
 }
 
+// =====================================================================
+// 15. getTopCandidates
+// =====================================================================
+
 /**
- * Get top N candidates by score descending, joined with product info.
+ * SELECT top N candidates ordered by a specific score column
+ * (default: default_score DESC), JOIN products.
  */
-export function getTopCandidates(db: Database, limit: number): unknown[] {
+export function getTopCandidates(
+  db: Database,
+  limit: number,
+  sortBy: string = "default_score",
+): CandidateWithProduct[] {
+  // Validate sortBy to prevent SQL injection
+  const column = ALLOWED_SORT_COLUMNS.has(sortBy) ? sortBy : "default_score";
+
   return db
     .prepare(
-      `
-    SELECT c.*, p.product_name, p.shop_name, p.country, p.category
-    FROM candidates c
-    JOIN products p ON c.product_id = p.id
-    ORDER BY c.score DESC
-    LIMIT ?
-  `,
+      `SELECT c.candidate_id, c.product_id, c.default_score, c.trending_score,
+              c.blue_ocean_score, c.high_margin_score, c.shop_copy_score,
+              c.synced_to_notion, c.created_at,
+              p.product_name, p.shop_name, p.country, p.category
+       FROM candidates c
+       JOIN products p ON c.product_id = p.product_id
+       ORDER BY c.${column} DESC
+       LIMIT ?`,
     )
-    .all(limit);
+    .all(limit) as CandidateWithProduct[];
 }
 
+// =====================================================================
+// 16. markSynced
+// =====================================================================
+
 /**
- * Mark a candidate as synced to Notion.
+ * UPDATE candidates SET synced_to_notion = 1 WHERE candidate_id = ?
  */
 export function markSynced(db: Database, candidateId: number): void {
-  db.prepare("UPDATE candidates SET synced_to_notion = 1 WHERE id = ?").run(
-    candidateId,
-  );
+  db.prepare(
+    `UPDATE candidates SET synced_to_notion = 1 WHERE candidate_id = ?`,
+  ).run(candidateId);
 }

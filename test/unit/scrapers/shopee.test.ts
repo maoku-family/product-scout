@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { parseShopeeSearchResults, searchShopee } from "@/scrapers/shopee";
+import { parseShopeeSearchResults } from "@/scrapers/shopee";
 
 const fixturesDir = resolve(import.meta.dirname, "../../fixtures/shopee");
 
@@ -71,17 +71,18 @@ describe("parseShopeeSearchResults", () => {
   });
 });
 
-/* eslint-disable @typescript-eslint/naming-convention -- Shopee API mock data uses snake_case */
+/* eslint-disable @typescript-eslint/naming-convention, @typescript-eslint/no-unsafe-type-assertion -- Shopee API mock data uses snake_case */
 
+// Mock global fetch once at module level — avoids race conditions in parallel tests
 const mockFetch = vi.fn();
+globalThis.fetch = mockFetch as typeof fetch;
+
+// Import after mock setup so module captures the mocked fetch
+const { searchShopee } = await import("@/scrapers/shopee");
 
 describe("searchShopee", () => {
   beforeEach(() => {
-    vi.stubGlobal("fetch", mockFetch);
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
+    mockFetch.mockReset();
   });
 
   it("constructs correct URL for the region", async () => {
@@ -172,4 +173,4 @@ describe("searchShopee", () => {
     expect(products).toHaveLength(0);
   });
 });
-/* eslint-enable @typescript-eslint/naming-convention */
+/* eslint-enable @typescript-eslint/naming-convention, @typescript-eslint/no-unsafe-type-assertion */

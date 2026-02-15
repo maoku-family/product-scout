@@ -1,24 +1,15 @@
-import { homedir } from "node:os";
-import { resolve } from "node:path";
-
-import { chromium } from "playwright";
-
 import { FastmossProductSchema } from "@/schemas/product";
 import type { FastmossProduct } from "@/schemas/product";
+import {
+  checkLoginStatus,
+  FASTMOSS_BASE_URL,
+  launchFastmossContext,
+  parsePercentage,
+} from "@/scrapers/fastmoss/shared";
+import type { FastmossScrapeOptions } from "@/scrapers/fastmoss/shared";
 import { logger } from "@/utils/logger";
 import { parseChineseNumber } from "@/utils/parse-chinese-number";
 import { withRetry } from "@/utils/retry";
-
-const FASTMOSS_BASE_URL = "https://www.fastmoss.com/e-commerce/saleslist";
-const DEFAULT_PROFILE_DIR = resolve(homedir(), ".product-scout-chrome");
-
-export type FastmossScrapeOptions = {
-  region: string;
-  category?: string;
-  limit?: number;
-  /** Custom profile directory for Chrome persistent context */
-  profileDir?: string;
-};
 
 /**
  * Raw row data extracted from the FastMoss DOM via page.evaluate().
@@ -40,7 +31,7 @@ type RawRowData = {
  * ESLint disabled because DOM types are unresolved in the Node TS context.
  */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-function extractTableDataScript(): RawRowData[] {
+export function extractTableDataScript(): RawRowData[] {
   const rows = document.querySelectorAll(
     "tr.ant-table-row.ant-table-row-level-0",
   );
@@ -93,19 +84,6 @@ function extractTableDataScript(): RawRowData[] {
 /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 
 /**
- * Parse a percentage string like "25.5%" or "-5.2%" or "1249.68%" into a decimal.
- * Returns 0 if unparseable.
- */
-function parsePercentage(raw: string): number {
-  const cleaned = raw.replace("%", "").replace(/,/g, "").trim();
-  const value = Number.parseFloat(cleaned);
-  if (Number.isNaN(value)) {
-    return 0;
-  }
-  return value / 100;
-}
-
-/**
  * Transform raw DOM data into validated FastmossProduct objects.
  * Pure function — fully testable without Playwright.
  */
@@ -144,7 +122,7 @@ export function transformRawRows(
 }
 
 /**
- * Scrape FastMoss ranking page using system Chrome with a persistent profile.
+ * Scrape FastMoss saleslist ranking page using system Chrome with a persistent profile.
  *
  * Uses Playwright's launchPersistentContext with `channel: "chrome"` to:
  * - Use the system Chrome browser (avoids WAF blocking Playwright's Chromium)
@@ -157,25 +135,13 @@ export function transformRawRows(
 export async function scrapeFastmoss(
   options: FastmossScrapeOptions,
 ): Promise<FastmossProduct[]> {
-  const profileDir = options.profileDir ?? DEFAULT_PROFILE_DIR;
-
-  logger.info("Launching Chrome with persistent profile", { profileDir });
-
-  const context = await withRetry(
-    () =>
-      chromium.launchPersistentContext(profileDir, {
-        channel: "chrome",
-        headless: false,
-        timeout: 30000,
-      }),
-    { maxRetries: 3, delay: 2000 },
-  );
+  const context = await launchFastmossContext(options.profileDir);
 
   try {
     const page = await context.newPage();
 
     // Build URL with region filter
-    const url = new URL(FASTMOSS_BASE_URL);
+    const url = new URL(`${FASTMOSS_BASE_URL}/e-commerce/saleslist`);
     url.searchParams.set("country", options.region);
     if (options.category) {
       url.searchParams.set("category", options.category);
@@ -191,14 +157,7 @@ export async function scrapeFastmoss(
     );
 
     // Check for login redirect (expired session)
-    const currentUrl = page.url();
-    if (currentUrl.includes("/login") || currentUrl.includes("/sign")) {
-      await page.close();
-      logger.error("FastMoss session expired — please login in Chrome");
-      throw new Error(
-        "FastMoss session expired. Please login at https://www.fastmoss.com in your Chrome browser.",
-      );
-    }
+    checkLoginStatus(page);
 
     // Wait for the Ant Design table to render
     await page.waitForSelector("tr.ant-table-row", { timeout: 30000 });

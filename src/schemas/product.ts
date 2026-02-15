@@ -16,6 +16,56 @@ export const FastmossProductSchema = z.object({
 
 export type FastmossProduct = z.infer<typeof FastmossProductSchema>;
 
+// ── NewProductItem (newProducts page scraped data) ───────────────────
+
+export const NewProductItemSchema = z.object({
+  productName: z.string(),
+  shopName: z.string(),
+  country: z.string(),
+  category: z.string().nullable(),
+  commissionRate: z.number().min(0).max(1),
+  threeDaySales: z.number().int().min(0),
+  threeDayRevenue: z.number().min(0),
+  totalUnitsSold: z.number().int().min(0),
+  totalSalesAmount: z.number().min(0),
+  scrapedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export type NewProductItem = z.infer<typeof NewProductItemSchema>;
+
+// ── HotlistItem (hotlist page scraped data) ──────────────────────────
+
+export const HotlistItemSchema = z.object({
+  productName: z.string(),
+  shopName: z.string(),
+  country: z.string(),
+  category: z.string().nullable(),
+  commissionRate: z.number().min(0).max(1),
+  unitsSold: z.number().int().min(0),
+  salesAmount: z.number().min(0),
+  creatorCount: z.number().int().min(0),
+  totalCreatorCount: z.number().int().min(0),
+  scrapedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export type HotlistItem = z.infer<typeof HotlistItemSchema>;
+
+// ── HotvideoItem (hotvideo page scraped data) ────────────────────────
+
+export const HotvideoItemSchema = z.object({
+  productName: z.string(),
+  videoContent: z.string(),
+  country: z.string(),
+  totalUnitsSold: z.number().int().min(0),
+  totalSalesAmount: z.number().min(0),
+  totalViews: z.number().int().min(0),
+  totalLikes: z.number().int().min(0),
+  totalComments: z.number().int().min(0),
+  scrapedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export type HotvideoItem = z.infer<typeof HotvideoItemSchema>;
+
 // ── ProductSchema (products table) ──────────────────────────────────
 
 export const ProductSchema = z.object({

@@ -140,13 +140,13 @@ product-scout/
 
 | Module | Description |
 |--------|-------------|
-| `core/pipeline.ts` | 5-phase orchestrator (A→E): collect → pre-filter/queue → deep mine → post-filter/score/tag → Notion sync. Supports `dryRun`, `skipScrape`, `strategyThreshold`, `shopDetailLimit`. |
-| `core/filter.ts` | Two-stage pure functions. Pre-filter: minUnitsSold, minGrowthRate, excludedCategories. Post-filter: price range, profit margin. Skips checks when data is missing. |
-| `core/scorer.ts` | Multi-strategy scoring with 5 profiles (default, trending, blueOcean, highMargin, shopCopy). Each profile defines weighted dimensions with specific normalization formulas (log scale, inverse, linear, sweet-spot). Stores per-dimension breakdown in `candidate_score_details`. |
-| `core/tagger.ts` | Auto-tagging with 3 system tag types: discovery (source-based), signal (rule-based from signals.yaml), strategy (score-threshold-based). Tags stored in `tags` + `candidate_tags` tables. |
-| `core/scrape-queue.ts` | Priority queue for deep mining. P1: never scraped, P2: stale + reappeared, P3: manually tracked. Enforces daily budget (default 300). Retry with 3-attempt limit. |
-| `core/enrichment-converters.ts` | Normalizes external data into `product_enrichments` format. Shopee → price/sold/rating + metadata. CJ → cost price/margin + shipping details. |
-| `core/sync.ts` | Creates Notion pages for unsynced candidates. Maps 5 strategy scores, labels (multi-select), and signals (rich text). Continues on individual failures. |
+| `core/pipeline.ts` | 5-phase orchestrator (A→E). Supports `dryRun`, `skipScrape`, `strategyThreshold`, `shopDetailLimit`. See [design.md §1](./design.md#1-system-architecture) for phase details. |
+| `core/filter.ts` | Two-stage pure functions: pre-filter (Phase B) and post-filter (Phase D). Skips checks when data is missing. |
+| `core/scorer.ts` | Multi-strategy scoring engine. 5 profiles × configurable dimensions with normalization. Stores per-dimension breakdown in `candidate_score_details`. See [design.md §3](./design.md#3-product-selection-engine) for profiles and formulas. |
+| `core/tagger.ts` | Auto-tagging: discovery (source-based), signal (rule-based), strategy (score-threshold-based). See [design.md §3](./design.md#tag-system) for tag types and rules. |
+| `core/scrape-queue.ts` | Priority queue for deep mining with daily budget and retry logic. See [design.md §3](./design.md#scrape-queue) for priority definitions. |
+| `core/enrichment-converters.ts` | Normalizes Shopee/CJ data into `product_enrichments` format. |
+| `core/sync.ts` | Creates Notion pages for unsynced candidates. Maps 5 scores, labels (multi-select), signals (rich text). Continues on individual failures. |
 
 ### Database
 
@@ -287,18 +287,6 @@ Config files in `config/`:
 - Nested objects (`price`, `profitMargin`) — shallow-merged, unspecified fields preserved
 - Scalars (`minUnitsSold`) — directly overridden
 - Arrays (`excludedCategories`) — fully replaced (not appended)
-
-### Scraping Budget
-
-```yaml
-scraping:
-  dailyDetailBudget: 300    # Max product details per day
-  dailySearchBudget: 300    # Max search results per day
-  freshness:
-    detailRefreshDays: 7    # Re-scrape product details
-    vocRefreshDays: 14      # Re-scrape VOC data
-    shopRefreshDays: 7      # Re-scrape shop data
-```
 
 ### Supported Regions
 

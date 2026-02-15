@@ -58,7 +58,7 @@ flowchart TB
 
 | Phase | What | Input | Output |
 |-------|------|-------|--------|
-| **A** | Collect from 8 sources | FastMoss (7 scrapers) + Shopee | products + product_snapshots |
+| **A** | Collect from 7 FastMoss sources | Saleslist, Hotlist, Hotvideo, New Products, Search, Shop Sales, Shop Hot | products + product_snapshots |
 | **B** | Pre-filter + build scrape queue | All products | Filtered queue (budget-limited) |
 | **C** | Deep mine detail pages + enrich | Queue items | product_details + product_enrichments |
 | **D** | Post-filter + tag + multi-score | All candidates | candidates + scores + tags |

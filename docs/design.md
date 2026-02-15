@@ -71,13 +71,13 @@ flowchart TB
 | Platform | Collection Method | Data Content | Purpose | Frequency |
 |----------|-------------------|--------------|---------|-----------|
 | **FastMoss — Saleslist** | Playwright persistent context + DOM extraction | Top-selling products, GMV, growth rate, commission | Discover trending products | Daily |
-| **FastMoss — Hotlist** | Playwright + DOM extraction | Trending products, hot index, creator count, video views | Discover trending products | Daily |
-| **FastMoss — Hotvideo** | Playwright + DOM extraction | Products with viral videos, view/like/comment counts | Discover viral content | Daily |
-| **FastMoss — New Products** | Playwright + DOM extraction | Recently listed products (<3 days), early sales metrics | First-mover advantage | Daily |
-| **FastMoss — Search** | Playwright + configurable filters | Strategy-driven product search (blue ocean, high margin) | Targeted discovery | Daily |
-| **FastMoss — Shop Lists** | Playwright + DOM extraction | Top shop rankings (sales + hot), shop metrics | Find successful shops | Daily |
-| **FastMoss — Shop Detail** | Playwright + DOM extraction | Shop detail page, per-product sales in shop | Deep dive into top shops | Daily (top 5) |
-| **FastMoss — Product Detail** | Playwright + DOM extraction | Hot index, VOC, price, channel distribution, competition | Deep product analysis | On-demand (queue) |
+| **FastMoss — Hotlist** | Playwright persistent context + DOM extraction | Trending products, hot index, creator count, video views | Discover trending products | Daily |
+| **FastMoss — Hotvideo** | Playwright persistent context + DOM extraction | Products with viral videos, view/like/comment counts | Discover viral content | Daily |
+| **FastMoss — New Products** | Playwright persistent context + DOM extraction | Recently listed products (<3 days), early sales metrics | First-mover advantage | Daily |
+| **FastMoss — Search** | Playwright persistent context + configurable filters | Strategy-driven product search (blue ocean, high margin) | Targeted discovery | Daily |
+| **FastMoss — Shop Lists** | Playwright persistent context + DOM extraction | Top shop rankings (sales + hot), shop metrics | Find successful shops | Daily |
+| **FastMoss — Shop Detail** | Playwright persistent context + DOM extraction | Shop detail page, per-product sales in shop | Deep dive into top shops | Daily (top 5) |
+| **FastMoss — Product Detail** | Playwright persistent context + DOM extraction | Hot index, VOC, price, channel distribution, competition | Deep product analysis | On-demand (queue) |
 | **Shopee** | Direct API fetch (`/api/v4/search/search_items`) | Price, sales, rating | Market demand validation | On-demand |
 | **Google Trends SEA** | google-trends-api (90-day window) | Keyword search trends | Supplementary trend signal (5% weight) | On-demand |
 | **CJ Dropshipping** | Official REST API (POST search) | Product cost, shipping ($3 default) | Cost/margin calculation | On-demand |

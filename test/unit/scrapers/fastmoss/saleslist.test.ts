@@ -143,13 +143,13 @@ function createMockPage(
 ): MockPage {
   return {
     goto: vi.fn().mockResolvedValue(undefined),
-    $: vi.fn().mockResolvedValue(
-      options.notLoggedIn
-        ? {
-            /* mock element */
-          }
-        : null,
-    ),
+    $: vi
+      .fn()
+      .mockResolvedValue(
+        options.notLoggedIn
+          ? { isVisible: vi.fn().mockResolvedValue(true) }
+          : null,
+      ),
     evaluate: vi.fn().mockResolvedValue(options.rawRows ?? []),
     waitForSelector: vi.fn().mockResolvedValue(undefined),
     waitForTimeout: vi.fn().mockResolvedValue(undefined),

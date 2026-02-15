@@ -333,7 +333,7 @@ describe("SecretsConfigSchema", () => {
       cjApiKey: "cj-key-123",
       notionKey: "notion-key-456",
       notionDbId: "db-id-789",
-      fastmossEmail: "user@example.com",
+      fastmossPhone: "19242240184",
       fastmossPassword: "secret123",
     };
 
@@ -341,7 +341,7 @@ describe("SecretsConfigSchema", () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.fastmossEmail).toBe("user@example.com");
+      expect(result.data.fastmossPhone).toBe("19242240184");
       expect(result.data.fastmossPassword).toBe("secret123");
     }
   });
@@ -357,7 +357,7 @@ describe("SecretsConfigSchema", () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.fastmossEmail).toBeUndefined();
+      expect(result.data.fastmossPhone).toBeUndefined();
       expect(result.data.fastmossPassword).toBeUndefined();
     }
   });

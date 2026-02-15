@@ -23,18 +23,17 @@ import {
 
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- mock cast */
 describe("isLoggedIn", () => {
-  it("returns false when login button is present (first selector matches)", async () => {
+  it("returns false when visible login button is present", async () => {
     const mockPage = {
       $: vi.fn().mockResolvedValue({
-        /* mock element handle */
+        isVisible: vi.fn().mockResolvedValue(true),
       }),
     };
 
     const result = await isLoggedIn(mockPage as never);
 
     expect(result).toBe(false);
-    // Should stop at first match — "text=登录"
-    expect(mockPage.$).toHaveBeenCalledWith("text=登录");
+    expect(mockPage.$).toHaveBeenCalledWith('text="注册/登录"');
   });
 
   it("returns true when no login button is found", async () => {
@@ -46,18 +45,30 @@ describe("isLoggedIn", () => {
 
     expect(result).toBe(true);
     // Should try all selectors
-    expect(mockPage.$).toHaveBeenCalledWith("text=登录");
-    expect(mockPage.$).toHaveBeenCalledWith("text=Log in");
+    expect(mockPage.$).toHaveBeenCalledWith('text="注册/登录"');
+    expect(mockPage.$).toHaveBeenCalledWith('text="Log in"');
+  });
+
+  it("returns true when login button exists but is hidden", async () => {
+    const mockPage = {
+      $: vi.fn().mockResolvedValue({
+        isVisible: vi.fn().mockResolvedValue(false),
+      }),
+    };
+
+    const result = await isLoggedIn(mockPage as never);
+
+    expect(result).toBe(true);
   });
 });
 
 // --- checkLoginStatus tests ---
 
 describe("checkLoginStatus", () => {
-  it("throws when 'Log in' button is present (not logged in)", async () => {
+  it("throws when login button is visible (not logged in)", async () => {
     const mockPage = {
       $: vi.fn().mockResolvedValue({
-        /* mock element handle */
+        isVisible: vi.fn().mockResolvedValue(true),
       }),
     };
 
@@ -66,7 +77,7 @@ describe("checkLoginStatus", () => {
     );
   });
 
-  it("resolves when 'Log in' button is absent (logged in)", async () => {
+  it("resolves when no login button is found (logged in)", async () => {
     const mockPage = {
       $: vi.fn().mockResolvedValue(null),
     };
@@ -77,7 +88,7 @@ describe("checkLoginStatus", () => {
   it("throws with instruction to run login script", async () => {
     const mockPage = {
       $: vi.fn().mockResolvedValue({
-        /* mock element */
+        isVisible: vi.fn().mockResolvedValue(true),
       }),
     };
 

@@ -108,12 +108,12 @@ async function autoLogin(): Promise<void> {
     process.exit(1);
   }
 
-  if (!secrets.fastmossEmail || !secrets.fastmossPassword) {
+  if (!secrets.fastmossPhone || !secrets.fastmossPassword) {
     console.error(
-      "\n❌ Auto mode requires fastmossEmail and fastmossPassword in config/secrets.yaml.\n" +
+      "\n❌ Auto mode requires fastmossPhone and fastmossPassword in config/secrets.yaml.\n" +
         "   Add the following to your secrets.yaml:\n\n" +
-        "     fastmossEmail: your-phone-number\n" +
-        "     fastmossPassword: your-password\n\n" +
+        '     fastmossPhone: "your-phone-number"\n' +
+        '     fastmossPassword: "your-password"\n\n' +
         "   Or use manual mode: bun run scripts/login.ts\n",
     );
     process.exit(1);
@@ -193,16 +193,24 @@ async function autoLogin(): Promise<void> {
       process.exit(1);
     }
 
-    await phoneInput.fill(secrets.fastmossEmail);
+    await phoneInput.fill(secrets.fastmossPhone);
     await passwordInput.fill(secrets.fastmossPassword);
     logger.info("Filled credentials");
 
     // Step 5: Click "注册/登录" submit button
-    const submitButton = await page.$(".ant-btn-primary");
-    if (submitButton) {
-      await submitButton.click();
-      logger.info("Clicked submit button");
+    // Note: CAPTCHA/slider may appear after submit — if so, auto-login will
+    // time out. Use manual mode as fallback: bun run scripts/login.ts
+    const submitButton = await page.$(".ant-modal .ant-btn-primary");
+    if (!submitButton) {
+      logger.error("Could not find submit button in login modal");
+      console.error(
+        "\n❌ Could not find submit button in login modal.\n" +
+          "   Try manual mode: bun run scripts/login.ts\n",
+      );
+      process.exit(1);
     }
+    await submitButton.click();
+    logger.info("Clicked submit button");
 
     // Wait for login to complete
     await page.waitForTimeout(3000);

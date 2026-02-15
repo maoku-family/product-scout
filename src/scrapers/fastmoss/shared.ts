@@ -41,21 +41,23 @@ export async function launchFastmossContext(
 
 /**
  * Selectors that match the login button in the FastMoss top bar.
- * The Chinese UI shows "注册/登录", so we match "登录" (substring match).
+ * The Chinese UI shows "注册/登录", so we match "注册/登录" exactly.
  * Also checks English "Log in" in case the UI language changes.
  * Playwright's $() does not support comma-separated selectors, so we try each one.
+ * We add a visibility check to avoid matching hidden/footer elements.
  */
-const LOGIN_BUTTON_SELECTORS = ["text=登录", "text=Log in"];
+const LOGIN_BUTTON_SELECTORS = ['text="注册/登录"', 'text="Log in"'];
 
 /**
  * Check if the current page is logged in to FastMoss.
  * Detects the login button in the top bar — present on all pages when not logged in.
- * Supports both Chinese ("登录") and English ("Log in") UI.
+ * Supports both Chinese ("注册/登录") and English ("Log in") UI.
+ * Only matches visible elements to avoid false positives from hidden DOM nodes.
  */
 export async function isLoggedIn(page: Page): Promise<boolean> {
   for (const selector of LOGIN_BUTTON_SELECTORS) {
     const loginButton = await page.$(selector);
-    if (loginButton !== null) {
+    if (loginButton !== null && (await loginButton.isVisible())) {
       return false;
     }
   }

@@ -3,32 +3,77 @@ import { Client } from "@notionhq/client";
 import type { Database } from "bun:sqlite";
 
 import { getUnsyncedCandidates, markSynced } from "@/db/queries";
+import type { CandidateWithProduct } from "@/db/queries";
 import { logger } from "@/utils/logger";
 
-type UnsyncedCandidate = {
-  id: number;
-  product_id: number;
-  score: number;
-  trend_status: string;
-  created_at: string;
-  product_name: string;
-  shop_name: string;
-  country: string;
-  category: string | null;
-};
+// ── Internal row type for tag queries ───────────────────────────────
+
+type TagNameRow = { tag_name: string };
+
+// ── Tag helpers ─────────────────────────────────────────────────────
+
+/**
+ * Get label tag names for a candidate (excludes signal tags).
+ * Used for the Labels Multi-select property in Notion.
+ */
+export function getTagsForCandidate(
+  db: Database,
+  candidateId: number,
+): string[] {
+  const rows = db
+    .prepare(
+      `SELECT t.tag_name
+       FROM candidate_tags ct
+       JOIN tags t ON ct.tag_id = t.tag_id
+       WHERE ct.candidate_id = ? AND t.tag_type != 'signal'`,
+    )
+    .all(candidateId) as TagNameRow[];
+
+  return rows.map((r) => r.tag_name);
+}
+
+/**
+ * Get signal-type tag names for a candidate.
+ * Signals are tags where tag_type = 'signal'.
+ */
+export function getSignalsForCandidate(
+  db: Database,
+  candidateId: number,
+): string[] {
+  const rows = db
+    .prepare(
+      `SELECT t.tag_name
+       FROM candidate_tags ct
+       JOIN tags t ON ct.tag_id = t.tag_id
+       WHERE ct.candidate_id = ? AND t.tag_type = 'signal'`,
+    )
+    .all(candidateId) as TagNameRow[];
+
+  return rows.map((r) => r.tag_name);
+}
+
+// ── Notion property mapping ─────────────────────────────────────────
 
 /**
  * Map a candidate to Notion page properties.
+ * Includes 5 strategy scores, labels (Multi-select), and signals (rich text).
  */
 export function mapToNotionProperties(
-  candidate: UnsyncedCandidate,
+  candidate: CandidateWithProduct,
+  tags: string[],
+  signalSummary: string,
 ): Record<string, unknown> {
   return {
     "Product Name": {
       title: [{ text: { content: candidate.product_name } }],
     },
-    "Total Score": { number: candidate.score },
-    Trend: { select: { name: candidate.trend_status } },
+    "Default Score": { number: candidate.default_score },
+    "Trending Score": { number: candidate.trending_score },
+    "Blue Ocean Score": { number: candidate.blue_ocean_score },
+    "High Margin Score": { number: candidate.high_margin_score },
+    "Shop Copy Score": { number: candidate.shop_copy_score },
+    Labels: { multi_select: tags.map((name) => ({ name })) },
+    Signals: { rich_text: [{ text: { content: signalSummary } }] },
     Category: candidate.category
       ? { select: { name: candidate.category } }
       : { select: null },
@@ -36,6 +81,8 @@ export function mapToNotionProperties(
     "Discovery Date": { date: { start: candidate.created_at } },
   };
 }
+
+// ── Sync to Notion ──────────────────────────────────────────────────
 
 /**
  * Sync unsynced candidates to Notion.
@@ -47,7 +94,7 @@ export async function syncToNotion(
   notionDbId: string,
 ): Promise<number> {
   const client = new Client({ auth: notionApiKey });
-  const candidates = getUnsyncedCandidates(db) as UnsyncedCandidate[];
+  const candidates = getUnsyncedCandidates(db);
 
   if (candidates.length === 0) {
     logger.info("No unsynced candidates to sync");
@@ -58,18 +105,26 @@ export async function syncToNotion(
 
   for (const candidate of candidates) {
     try {
+      const tags = getTagsForCandidate(db, candidate.candidate_id);
+      const signals = getSignalsForCandidate(db, candidate.candidate_id);
+      const signalSummary = signals.join(", ");
+
       await client.pages.create({
         parent: { database_id: notionDbId },
-        properties: mapToNotionProperties(candidate) as any,
+        properties: mapToNotionProperties(
+          candidate,
+          tags,
+          signalSummary,
+        ) as any,
       });
-      markSynced(db, candidate.id);
+      markSynced(db, candidate.candidate_id);
       syncedCount++;
       logger.info("Synced to Notion", {
         productName: candidate.product_name,
       });
     } catch (error) {
       logger.error("Failed to sync candidate to Notion", {
-        candidateId: candidate.id,
+        candidateId: candidate.candidate_id,
         productName: candidate.product_name,
         error,
       });
